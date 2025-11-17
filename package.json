@@ -1,0 +1,24 @@
+{
+	"name": "nodejs-youtube-transcriptor",
+	"version": "1.0.0",
+	"description": "NodeJS Youtube Transcriptor",
+	"main": "src/index.js",
+	"bin": {
+		"transcriptor": "./src/index.js"
+	},
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"install": "npm link",
+		"uninstall": "npm unlink nodejs-youtube-transcriptor"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/michaellinhardt/nodejs-youtube-transcriptor.git"
+	},
+	"keywords": [
+		"cli",
+		"transcriptor"
+	],
+	"author": "michaellinhardt",
+	"license": "MIT"
+}
