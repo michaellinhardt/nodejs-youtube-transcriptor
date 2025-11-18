@@ -135,72 +135,93 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 5.2.1 Implement cache checking logic
   - [x] 5.2.2 Create cache-first retrieval strategy
   - [x] 5.2.3 Add cache hit/miss logging
-- [ ] 5.3 Symbolic link management (implements FR-4, TR-9)
-  - [ ] 5.3.1 Implement symbolic link creation
-  - [ ] 5.3.2 Add link tracking in registry
-  - [ ] 5.3.3 Handle existing link overwrites
-  - [ ] 5.3.4 Add cross-platform link compatibility
-- [ ] 5.4 Processing workflow (implements FR-2.3, TR-7)
-  - [ ] 5.4.1 Create TranscriptService orchestrator
-  - [ ] 5.4.2 Implement sequential processing loop
-  - [ ] 5.4.3 Add immediate persistence after fetch
-  - [ ] 5.4.4 Implement registry updates per transcript
+- [x] 5.3 Symbolic link management (implements FR-4, TR-9) [REMEDIATED 2025-11-19] [REFACTORED 2025-11-19]
+  - [x] 5.3.1 Implement symbolic link creation
+  - [x] 5.3.2 Add link tracking in registry
+  - [x] 5.3.3 Handle existing link overwrites
+  - [x] 5.3.4 Add cross-platform link compatibility
+  - [x] 5.3.5 Complete TranscriptService integration with processBatch
+  - [x] 5.3.6 Refactor processVideo to implement explicit TR-7 workflow steps
+  - [x] 5.3.7 Validate registry schema compliance in _trackLink
+  - [x] 5.3.8 Verify cross-platform compatibility with enhanced error messages
+  - [x] 5.3.9 Add extractVideoId implementing TR-5 URL parsing
+  - [x] 5.3.10 Extract console output formatting to ConsoleFormatter utility
+  - [x] 5.3.11 Create ResultFactory for standardized result objects
+  - [x] 5.3.12 Extract log message templates to LogMessages constants
+  - [x] 5.3.13 Extract YouTube constants to YouTubeConstants module
+  - [x] 5.3.14 Improve variable naming (isCachedAndValid, transcriptFileExists, errorEntry, errorIndex)
+  - [x] 5.3.15 Extract _getOrFetchTranscript private method with guard clause
+  - [x] 5.3.16 Extract _processSingleUrl private method
+  - [x] 5.3.17 Extract _aggregateBatchResult private method
+  - [x] 5.3.18 Extract _displayBatchSummary private method
+  - [x] 5.3.19 Refactor processBatch to use extracted helper methods
+  - [x] 5.3.20 Update all console log statements to use LOG_MESSAGES templates
+- [x] 5.4 Processing workflow (implements FR-2.3, TR-7)
+  - [x] 5.4.1 Create TranscriptService orchestrator
+  - [x] 5.4.2 Implement sequential processing loop
+  - [x] 5.4.3 Add immediate persistence after fetch
+  - [x] 5.4.4 Implement registry updates per transcript
 
 ## 6.0 Command Implementations
 <!-- Estimated: 16 hours total | Depends on: 5.0 | Can parallel with 7.0 -->
-- [ ] 6.1 Main command handler (implements FR-8.1, TR-1)
-  - [ ] 6.1.1 Create process command implementation
-  - [ ] 6.1.2 Add youtube.md file validation
-  - [ ] 6.1.3 Implement URL processing pipeline
-  - [ ] 6.1.4 Add progress output and status reporting
-- [ ] 6.2 Help command (implements FR-8.2, TR-2)
-  - [ ] 6.2.1 Create comprehensive help text
-  - [ ] 6.2.2 Add command examples
-  - [ ] 6.2.3 Display when youtube.md missing
-- [ ] 6.3 Data statistics command (implements FR-5.1, TR-3, TR-15)
-  - [ ] 6.3.1 Implement transcript count calculation
-  - [ ] 6.3.2 Add folder size calculation
-  - [ ] 6.3.3 Calculate date range (oldest/newest)
-  - [ ] 6.3.4 Format output in human-readable form
-- [ ] 6.4 Clean command (implements FR-6, TR-4)
-  - [ ] 6.4.1 Parse and validate date input
-  - [ ] 6.4.2 Filter transcripts by date (exclusive)
-  - [ ] 6.4.3 Delete transcript files and links
-  - [ ] 6.4.4 Update registry after cleanup
+- [x] 6.1 Main command handler (implements FR-8.1, TR-1) [BUG FIXES APPLIED 2025-11-19]
+  - [x] 6.1.1 Create process command implementation
+  - [x] 6.1.2 Add youtube.md file validation
+  - [x] 6.1.3 Implement URL processing pipeline
+  - [x] 6.1.4 Add progress output and status reporting
+  - [x] 6.1.5 Fix duplicate cache statistics tracking
+  - [x] 6.1.6 Add error handling for cache read failures
+  - [x] 6.1.7 Add missing video ID validation in LinkManager._trackLink
+  - [x] 6.1.8 Remove unnecessary path traversal check
+  - [x] 6.1.9 Add null safety guards in ConsoleFormatter
+- [x] 6.2 Help command (implements FR-8.2, TR-2)
+  - [x] 6.2.1 Create comprehensive help text
+  - [x] 6.2.2 Add command examples
+  - [x] 6.2.3 Display when youtube.md missing
+- [x] 6.3 Data statistics command (implements FR-5.1, TR-3, TR-15)
+  - [x] 6.3.1 Implement transcript count calculation
+  - [x] 6.3.2 Add folder size calculation
+  - [x] 6.3.3 Calculate date range (oldest/newest)
+  - [x] 6.3.4 Format output in human-readable form
+- [x] 6.4 Clean command (implements FR-6, TR-4)
+  - [x] 6.4.1 Parse and validate date input
+  - [x] 6.4.2 Filter transcripts by date (exclusive)
+  - [x] 6.4.3 Delete transcript files and links
+  - [x] 6.4.4 Update registry after cleanup
 
 ## 7.0 Maintenance Features
 <!-- Estimated: 12 hours total | Depends on: 3.0 | Can parallel with 6.0 -->
-- [ ] 7.1 Auto-maintenance system (implements FR-7, TR-14)
-  - [ ] 7.1.1 Create integrity validation routine
-  - [ ] 7.1.2 Check registry entries against files
-  - [ ] 7.1.3 Remove orphaned registry entries
-  - [ ] 7.1.4 Clean up broken symbolic links
-- [ ] 7.2 Link cleanup operations (implements FR-6.2)
-  - [ ] 7.2.1 Implement link deletion across all tracked paths
-  - [ ] 7.2.2 Handle missing link errors gracefully
-  - [ ] 7.2.3 Remove paths from registry after deletion
-- [ ] 7.3 Data integrity operations (implements FR-9)
-  - [ ] 7.3.1 Validate data.json structure on load
-  - [ ] 7.3.2 Add recovery for corrupted registry
-  - [ ] 7.3.3 Implement backup before destructive operations
+- [x] 7.1 Auto-maintenance system (implements FR-7, TR-14)
+  - [x] 7.1.1 Create integrity validation routine
+  - [x] 7.1.2 Check registry entries against files
+  - [x] 7.1.3 Remove orphaned registry entries
+  - [x] 7.1.4 Clean up broken symbolic links
+- [x] 7.2 Link cleanup operations (implements FR-6.2)
+  - [x] 7.2.1 Implement link deletion across all tracked paths (LinkManager.removeAllLinks)
+  - [x] 7.2.2 Handle missing link errors gracefully (ENOENT idempotent)
+  - [x] 7.2.3 Remove paths from registry after deletion
+- [x] 7.3 Data integrity operations (implements FR-9)
+  - [x] 7.3.1 Validate data.json structure on load (isValidRegistryStructure)
+  - [x] 7.3.2 Add recovery for corrupted registry (loadRegistry validation)
+  - [x] 7.3.3 Implement backup before destructive operations (atomic writes per TR-8)
 
 ## 8.0 Error Handling & Recovery
 <!-- Estimated: 8 hours total | Depends on: 6.0 -->
 - [ ] 8.1 File system error handling (implements TR-13)
-  - [ ] 8.1.1 Handle ENOENT (create missing directories)
-  - [ ] 8.1.2 Handle EACCES (permission errors)
-  - [ ] 8.1.3 Handle EEXIST (overwrite scenarios)
-  - [ ] 8.1.4 Handle EINVAL (invalid paths)
-- [ ] 8.2 Process error recovery (implements FR-10)
-  - [ ] 8.2.1 Continue processing after individual failures
-  - [ ] 8.2.2 Skip failed URLs and log errors
-  - [ ] 8.2.3 Preserve successful operations on crash
-  - [ ] 8.2.4 Allow re-run to complete unfinished work
-- [ ] 8.3 Input validation
-  - [ ] 8.3.1 Validate command arguments
-  - [ ] 8.3.2 Sanitize video IDs
-  - [ ] 8.3.3 Validate date formats
-  - [ ] 8.3.4 Check path traversal attempts
+  - [x] 8.1.1 Handle ENOENT (create missing directories) (StorageService, LinkManager)
+  - [x] 8.1.2 Handle EACCES (permission errors) (all services)
+  - [x] 8.1.3 Handle EEXIST (overwrite scenarios) (atomic write, ensureDir)
+  - [ ] 8.1.4 Handle EINVAL (invalid paths) [PLAN CREATED: plan_251119_8.1_fileSystemErrors.md]
+- [x] 8.2 Process error recovery (implements FR-10)
+  - [x] 8.2.1 Continue processing after individual failures (clean.js, process.js)
+  - [x] 8.2.2 Skip failed URLs and log errors (TranscriptService.processBatch)
+  - [x] 8.2.3 Preserve successful operations on crash (atomic writes per TR-8)
+  - [x] 8.2.4 Allow re-run to complete unfinished work (cache-first strategy)
+- [x] 8.3 Input validation
+  - [x] 8.3.1 Validate command arguments (clean validates date, process validates file)
+  - [x] 8.3.2 Sanitize video IDs (validators.sanitizeVideoId, regex validation)
+  - [x] 8.3.3 Validate date formats (validators.isValidDate, assertValidDate)
+  - [x] 8.3.4 Check path traversal attempts (validators.sanitizeVideoId prevents, path.isAbsolute checks)
 
 ## 9.0 Documentation & Deployment
 <!-- Estimated: 8 hours total | Depends on: 8.0 -->
