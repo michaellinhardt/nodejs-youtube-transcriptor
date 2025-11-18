@@ -221,6 +221,9 @@ class APIClient {
     this.validateVideoUrl(videoUrl);
 
     const videoId = URLValidator.extractVideoId(videoUrl);
+    const startTime = Date.now();
+
+    console.log(`[API] Fetching transcript for video: ${videoId}`);
 
     if (this.inflightRequests.has(videoId)) {
       console.log(`[API] Deduplicating request for ${videoId}`);
@@ -228,6 +231,11 @@ class APIClient {
     }
 
     const requestPromise = this.fetchWithRetry(videoUrl)
+      .then(transcript => {
+        const duration = Date.now() - startTime;
+        console.log(`[API] Transcript received: ${transcript.length} chars in ${duration}ms`);
+        return transcript;
+      })
       .finally(() => {
         this.inflightRequests.delete(videoId);
         this.retryBudgetStartTime = null;
@@ -282,6 +290,14 @@ class APIClient {
       API_CLIENT_CONFIG.ENDPOINT,
       { url: videoUrl }
     );
+
+    if (!response) {
+      throw this.createAppError(
+        ERROR_TYPES.VALIDATION,
+        'API returned null response object'
+      );
+    }
+
     return this.extractTranscriptText(response);
   }
 
@@ -532,12 +548,19 @@ class APIClient {
       );
     }
 
-    const text = response.data.transcript_only_text;
-
-    if (!text || typeof text !== 'string') {
+    if (!('transcript_only_text' in response.data)) {
       throw this.createAppError(
         ERROR_TYPES.VALIDATION,
         'API response missing transcript_only_text field'
+      );
+    }
+
+    const text = response.data.transcript_only_text;
+
+    if (typeof text !== 'string') {
+      throw this.createAppError(
+        ERROR_TYPES.VALIDATION,
+        `API response transcript_only_text must be string, got ${typeof text}`
       );
     }
 
@@ -547,6 +570,14 @@ class APIClient {
       throw this.createAppError(
         ERROR_TYPES.VALIDATION,
         'API returned empty transcript text'
+      );
+    }
+
+    const MAX_TRANSCRIPT_LENGTH = 10 * 1024 * 1024;
+    if (trimmedText.length > MAX_TRANSCRIPT_LENGTH) {
+      throw this.createAppError(
+        ERROR_TYPES.VALIDATION,
+        `Transcript exceeds maximum size: ${trimmedText.length} bytes`
       );
     }
 

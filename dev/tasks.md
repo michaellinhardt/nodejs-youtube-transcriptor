@@ -110,10 +110,14 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 4.1.28 Refactor URLParser to use extracted utilities
   - [x] 4.1.29 Reduce APIClient from 722 to 770 lines (includes better structure with extracted modules)
   - [x] 4.1.30 Reduce method complexity and improve readability
-- [ ] 4.2 Scrape Creators API integration
-  - [ ] 4.2.1 Implement fetchTranscript method
-  - [ ] 4.2.2 Parse transcript_only_text from response
-  - [ ] 4.2.3 Add request/response logging
+- [x] 4.2 Scrape Creators API integration
+  - [x] 4.2.1 Implement fetchTranscript method
+  - [x] 4.2.2 Parse transcript_only_text from response
+  - [x] 4.2.3 Add request/response logging
+  - [x] 4.2.4 Fix null response validation in executeApiRequest
+  - [x] 4.2.5 Enhance field existence check in extractTranscriptText
+  - [x] 4.2.6 Add 10MB transcript size validation
+  - [x] 4.2.7 Add per-request duration and size logging
 - [x] 4.3 Error handling and retries [HIGH RISK] (implements TR-12)
   - [x] 4.3.1 Implement exponential backoff for 429 errors
   - [x] 4.3.2 Handle API authentication errors (401)
