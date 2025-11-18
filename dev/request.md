@@ -2,7 +2,7 @@
 
 ## Task
 
-Use the appropriate agent to write the project overview based on my project description below.
+Use the file in @docs + my description below to produce the output document.
 
 ## Project Description
 
