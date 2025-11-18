@@ -1,5 +1,9 @@
 # Technical Requirements
 
+## Testing Policy
+
+This project will NOT include tests. The project scope is too small to warrant testing infrastructure, frameworks, or test coverage requirements.
+
 ## Technology Stack
 
 ### Core Platform

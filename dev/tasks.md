@@ -5,7 +5,7 @@
 
 ## Development Sequence Notes
 
-Priority order: 1.0 → 2.0 → 3.0 → 4.0 → 5.0 → 6.0 (can parallel with 7.0) → 8.0 → 9.0 → 10.0
+Priority order: 1.0 → 2.0 → 3.0 → 4.0 → 5.0 → 6.0 (can parallel with 7.0) → 8.0 → 9.0
 Critical path: 1.0 → 2.1 → 3.1 → 4.1 → 5.1
 High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
 
@@ -160,59 +160,37 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [ ] 8.3.3 Validate date formats
   - [ ] 8.3.4 Check path traversal attempts
 
-## 9.0 Testing Implementation
-<!-- Estimated: 16 hours total | Depends on: 8.0 -->
-- [ ] 9.1 Unit tests setup
-  - [ ] 9.1.1 Configure Jest testing framework
-  - [ ] 9.1.2 Create test structure matching src/
-  - [ ] 9.1.3 Set up test coverage reporting
-- [ ] 9.2 Unit tests implementation
-  - [ ] 9.2.1 Test URL parsing and validation
-  - [ ] 9.2.2 Test video ID extraction
-  - [ ] 9.2.3 Test date formatting utilities
-  - [ ] 9.2.4 Test path resolution logic
-- [ ] 9.3 Integration tests
-  - [ ] 9.3.1 Test API client with mocked responses
-  - [ ] 9.3.2 Test file system operations
-  - [ ] 9.3.3 Test symbolic link creation
-  - [ ] 9.3.4 Test registry persistence
-- [ ] 9.4 End-to-end tests
-  - [ ] 9.4.1 Test full transcript processing flow
-  - [ ] 9.4.2 Test clean command with fixtures
-  - [ ] 9.4.3 Test data command output
-  - [ ] 9.4.4 Test error recovery scenarios
+## 9.0 Documentation & Deployment
+<!-- Estimated: 8 hours total | Depends on: 8.0 -->
+- [ ] 9.1 User documentation
+  - [ ] 9.1.1 Create comprehensive README.md
+  - [ ] 9.1.2 Document installation process
+  - [ ] 9.1.3 Add usage examples
+  - [ ] 9.1.4 Document all commands and options
+- [ ] 9.2 Developer documentation
+  - [ ] 9.2.1 Document API integration details
+  - [ ] 9.2.2 Add architecture diagrams
+  - [ ] 9.2.3 Document data flow
+  - [ ] 9.2.4 Create contribution guidelines
+- [ ] 9.3 Deployment preparation
+  - [ ] 9.3.1 Test npm link installation
+  - [ ] 9.3.2 Verify cross-platform compatibility
+  - [ ] 9.3.3 Create installation script
+  - [ ] 9.3.4 Add uninstall cleanup procedures
+- [ ] 9.4 Performance optimization
+  - [ ] 9.4.1 Optimize registry loading for large datasets
+  - [ ] 9.4.2 Implement progress indicators
+  - [ ] 9.4.3 Add verbose/quiet mode options
+  - [ ] 9.4.4 Profile and optimize bottlenecks
 
-## 10.0 Documentation & Deployment
-<!-- Estimated: 8 hours total | Depends on: 9.0 -->
-- [ ] 10.1 User documentation
-  - [ ] 10.1.1 Create comprehensive README.md
-  - [ ] 10.1.2 Document installation process
-  - [ ] 10.1.3 Add usage examples
-  - [ ] 10.1.4 Document all commands and options
-- [ ] 10.2 Developer documentation
-  - [ ] 10.2.1 Document API integration details
-  - [ ] 10.2.2 Add architecture diagrams
-  - [ ] 10.2.3 Document data flow
-  - [ ] 10.2.4 Create contribution guidelines
-- [ ] 10.3 Deployment preparation
-  - [ ] 10.3.1 Test npm link installation
-  - [ ] 10.3.2 Verify cross-platform compatibility
-  - [ ] 10.3.3 Create installation script
-  - [ ] 10.3.4 Add uninstall cleanup procedures
-- [ ] 10.4 Performance optimization
-  - [ ] 10.4.1 Optimize registry loading for large datasets
-  - [ ] 10.4.2 Implement progress indicators
-  - [ ] 10.4.3 Add verbose/quiet mode options
-  - [ ] 10.4.4 Profile and optimize bottlenecks
-
-## 11.0 Future Enhancements (Optional)
+## 10.0 Future Enhancements (Optional)
 <!-- Post-MVP Features -->
-- [ ] 11.1 Batch processing improvements
-  - [ ] 11.1.1 Add concurrent API requests option
-  - [ ] 11.1.2 Implement queue management
-  - [ ] 11.1.3 Add resume capability for interrupted runs
-- [ ] 11.2 Advanced features
-  - [ ] 11.2.1 Add transcript search functionality
-  - [ ] 11.2.2 Implement transcript export formats
-  - [ ] 11.2.3 Add duplicate detection
-  - [ ] 11.2.4 Create transcript metadata enrichment
+- [ ] 10.1 Batch processing improvements
+  - [ ] 10.1.1 Add concurrent API requests option
+  - [ ] 10.1.2 Implement queue management
+  - [ ] 10.1.3 Add resume capability for interrupted runs
+- [ ] 10.2 Advanced features
+  - [ ] 10.2.1 Add transcript search functionality
+  - [ ] 10.2.2 Implement transcript export formats
+  - [ ] 10.2.3 Add duplicate detection
+  - [ ] 10.2.4 Create transcript metadata enrichment

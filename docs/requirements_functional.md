@@ -1,5 +1,9 @@
 # Functional Requirements
 
+## Project Scope
+
+**Testing Approach:** This project does not include automated tests (unit, integration, or E2E). The codebase is intentionally kept small and simple, making comprehensive testing infrastructure unnecessary. Manual verification during development is sufficient for this scope.
+
 ## Core Processing
 
 ### FR-1: URL Input Processing

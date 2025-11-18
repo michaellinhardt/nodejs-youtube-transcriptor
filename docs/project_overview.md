@@ -48,6 +48,8 @@ Transcriptor focuses exclusively on YouTube transcript extraction and management
 
 The scope explicitly excludes video downloading, audio processing, transcript generation from raw media, content transformation beyond basic text extraction, and publishing or sharing mechanisms beyond local filesystem operations.
 
+**Testing Infrastructure**: Given the project's small scope and straightforward functionality, no formal testing infrastructure (unit tests, integration tests, or automated test suites) is included. The simplicity of the tool does not warrant the overhead of maintaining test frameworks.
+
 ## Business Rules
 
 **Cache-First Processing**: The system always checks for existing transcripts before initiating API calls, treating the cache as the primary data source.
