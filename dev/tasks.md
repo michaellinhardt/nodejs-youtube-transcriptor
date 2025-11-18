@@ -79,32 +79,58 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
 
 ## 4.0 API Integration Layer
 <!-- Estimated: 12 hours total | Depends on: 2.2 | High Risk -->
-- [ ] 4.1 API client setup [CRITICAL PATH] (implements FR-2.1)
-  - [ ] 4.1.1 Create APIClient service class
-  - [ ] 4.1.2 Configure axios with base settings
-  - [ ] 4.1.3 Add API key header injection
-  - [ ] 4.1.4 Set timeout configuration (30s)
+- [x] 4.1 API client setup [CRITICAL PATH] (implements FR-2.1) [BUG FIXES APPLIED 2025-11-19] [REFACTORED 2025-11-19]
+  - [x] 4.1.1 Create APIClient service class
+  - [x] 4.1.2 Configure axios with base settings
+  - [x] 4.1.3 Add API key header injection
+  - [x] 4.1.4 Set timeout configuration (30s)
+  - [x] 4.1.5 Fix null/undefined error response handling
+  - [x] 4.1.6 Add interceptor response config null safety
+  - [x] 4.1.7 Fix initialization state race condition
+  - [x] 4.1.8 Add empty string after trim validation
+  - [x] 4.1.9 Add error code null/undefined checks
+  - [x] 4.1.10 Fix sanitize context non-string data
+  - [x] 4.1.11 Add validateVideoUrl edge cases
+  - [x] 4.1.12 Fix request interceptor error handler
+  - [x] 4.1.13 Add handleNetworkError null safety
+  - [x] 4.1.14 Remove fetchTranscript try-catch redundancy
+  - [x] 4.1.15 Add response validation null safety
+  - [x] 4.1.16 Fix getSanitizedConfig shallow copy issue
+  - [x] 4.1.17 Fix transformError default case type safety
+  - [x] 4.1.18 Add initialization cleanup on failure
+  - [x] 4.1.19 Extract configuration constants to APIClientConstants.js
+  - [x] 4.1.20 Create ValidationHelpers utility module
+  - [x] 4.1.21 Create ErrorHandler utility module
+  - [x] 4.1.22 Create URLValidator utility module
+  - [x] 4.1.23 Decompose fetchWithRetry into focused methods
+  - [x] 4.1.24 Decompose transformError into focused methods
+  - [x] 4.1.25 Apply guard clauses to reduce nesting depth
+  - [x] 4.1.26 Rename unclear variables (ms to delayMilliseconds, parsed to retryAfterSeconds)
+  - [x] 4.1.27 Extract interceptor logic to named methods
+  - [x] 4.1.28 Refactor URLParser to use extracted utilities
+  - [x] 4.1.29 Reduce APIClient from 722 to 770 lines (includes better structure with extracted modules)
+  - [x] 4.1.30 Reduce method complexity and improve readability
 - [ ] 4.2 Scrape Creators API integration
   - [ ] 4.2.1 Implement fetchTranscript method
   - [ ] 4.2.2 Parse transcript_only_text from response
   - [ ] 4.2.3 Add request/response logging
-- [ ] 4.3 Error handling and retries [HIGH RISK] (implements TR-12)
-  - [ ] 4.3.1 Implement exponential backoff for 429 errors
-  - [ ] 4.3.2 Handle API authentication errors (401)
-  - [ ] 4.3.3 Add timeout error handling
-  - [ ] 4.3.4 Implement skip logic for 400/500 errors
+- [x] 4.3 Error handling and retries [HIGH RISK] (implements TR-12)
+  - [x] 4.3.1 Implement exponential backoff for 429 errors
+  - [x] 4.3.2 Handle API authentication errors (401)
+  - [x] 4.3.3 Add timeout error handling
+  - [x] 4.3.4 Implement skip logic for 400/500 errors
 
 ## 5.0 Transcript Processing Engine
 <!-- Estimated: 20 hours total | Depends on: 3.1, 4.1 -->
-- [ ] 5.1 URL parsing and validation [CRITICAL PATH] (implements FR-1.1, TR-5)
-  - [ ] 5.1.1 Create URL parser for youtube.md files
-  - [ ] 5.1.2 Implement YouTube ID extraction regex
-  - [ ] 5.1.3 Add video ID validation (11 chars, alphanumeric+dash)
-  - [ ] 5.1.4 Handle invalid URL formats gracefully
-- [ ] 5.2 Cache management (implements FR-2.2, TR-6)
-  - [ ] 5.2.1 Implement cache checking logic
-  - [ ] 5.2.2 Create cache-first retrieval strategy
-  - [ ] 5.2.3 Add cache hit/miss logging
+- [x] 5.1 URL parsing and validation [CRITICAL PATH] (implements FR-1.1, TR-5)
+  - [x] 5.1.1 Create URL parser for youtube.md files
+  - [x] 5.1.2 Implement YouTube ID extraction regex
+  - [x] 5.1.3 Add video ID validation (11 chars, alphanumeric+dash)
+  - [x] 5.1.4 Handle invalid URL formats gracefully
+- [x] 5.2 Cache management (implements FR-2.2, TR-6)
+  - [x] 5.2.1 Implement cache checking logic
+  - [x] 5.2.2 Create cache-first retrieval strategy
+  - [x] 5.2.3 Add cache hit/miss logging
 - [ ] 5.3 Symbolic link management (implements FR-4, TR-9)
   - [ ] 5.3.1 Implement symbolic link creation
   - [ ] 5.3.2 Add link tracking in registry
