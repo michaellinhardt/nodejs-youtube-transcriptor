@@ -1,12 +1,14 @@
 const fs = require('fs-extra');
 const path = require('path');
 const validators = require('../utils/validators');
+const RegistryCache = require('./RegistryCache');
 
 /**
  * Storage Service
  *
  * Manages file system persistence and symbolic link operations
  * Implements FR-3, FR-4, FR-9 and TR-19 initialization
+ * Enhanced with registry caching for performance (task 9.3.3)
  *
  * @class StorageService
  */
@@ -25,6 +27,7 @@ class StorageService {
   constructor(pathResolver) {
     this.paths = pathResolver;
     this.initialized = false;
+    this.cache = new RegistryCache();
   }
 
   /**
@@ -65,6 +68,7 @@ class StorageService {
    * Load registry from data.json (implements FR-3.2)
    * Returns empty object for new installations
    * Validates structure before returning
+   * Uses cache for performance on repeated calls
    *
    * @returns {Promise<Object>} Registry data
    * @throws {Error} If registry corrupted or invalid structure
@@ -88,6 +92,40 @@ class StorageService {
     }
 
     return registryData;
+  }
+
+  /**
+   * Load registry metadata only (optimized for statistics)
+   * Uses cache to avoid loading full registry
+   *
+   * @returns {Promise<Array>} Metadata array
+   */
+  async loadRegistryMetadata() {
+    return await this.cache.loadMetadata(async () => {
+      return await this.loadRegistry();
+    });
+  }
+
+  /**
+   * Get single registry entry (cache-aware)
+   * @param {string} videoId - Video identifier
+   * @returns {Promise<Object|undefined>} Registry entry
+   */
+  async getRegistryEntry(videoId) {
+    return await this.cache.getEntry(videoId, async () => {
+      return await this.loadRegistry();
+    });
+  }
+
+  /**
+   * Check if registry has entry (cache-aware)
+   * @param {string} videoId - Video identifier
+   * @returns {Promise<boolean>} True if exists
+   */
+  async hasRegistryEntry(videoId) {
+    return await this.cache.hasEntry(videoId, async () => {
+      return await this.loadRegistry();
+    });
   }
 
   /**
@@ -227,6 +265,7 @@ class StorageService {
   /**
    * Save registry to data.json with atomic write (implements TR-8, TR-16)
    * Uses temporary file pattern for crash-safety
+   * Invalidates cache before write for consistency
    *
    * @param {Object} data - Registry data to save
    * @returns {Promise<void>}
@@ -240,11 +279,16 @@ class StorageService {
       throw new Error('Registry save: Invalid structure provided (failed validation)');
     }
 
+    // Invalidate cache BEFORE write (fail-safe consistency)
+    this.cache.startWrite();
+
     const registryPath = this.paths.getRegistryPath();
 
     try {
       await this.atomicWriteJson(registryPath, data);
+      this.cache.endWrite();
     } catch (error) {
+      this.cache.endWrite();
       throw new Error(`Failed to save registry: ${error.message}`);
     }
   }

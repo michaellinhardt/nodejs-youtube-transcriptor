@@ -43,6 +43,42 @@ async function calculateStatistics(registry, storagePath) {
 }
 
 /**
+ * Calculate statistics using metadata only (optimized for cache)
+ * Avoids loading full registry
+ * @param {Array} metadata - Registry metadata array
+ * @param {string} storagePath - Path to ~/.transcriptor
+ * @returns {Promise<Object>} Statistics object
+ */
+async function calculateStatisticsFromMetadata(metadata, storagePath) {
+  // Guard: Validate storage path
+  if (!storagePath || typeof storagePath !== 'string' || !path.isAbsolute(storagePath)) {
+    throw new Error('Invalid storage path: must be absolute path string');
+  }
+
+  // Guard: Handle null/undefined metadata
+  if (!Array.isArray(metadata) || metadata.length === 0) {
+    return getZeroStatistics();
+  }
+
+  const total = metadata.length;
+  const dates = metadata
+    .map(m => m.date)
+    .filter(d => d && typeof d === 'string' && d.trim() !== '')
+    .sort();
+
+  const oldest = dates.length > 0 ? dates[0] : null;
+  const newest = dates.length > 0 ? dates[dates.length - 1] : null;
+  const size = await getFolderSize(storagePath);
+
+  return {
+    total,
+    size,
+    oldest,
+    newest
+  };
+}
+
+/**
  * Get zero state for empty repository
  */
 function getZeroStatistics() {
@@ -180,5 +216,6 @@ function formatSize(bytes) {
 
 module.exports = {
   calculateStatistics,
+  calculateStatisticsFromMetadata,
   formatSize,
 };

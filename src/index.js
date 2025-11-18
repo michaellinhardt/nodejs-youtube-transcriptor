@@ -3,12 +3,14 @@
  *
  * Implements TR-18: CLI Entry Point routing
  * Configures commander.js and delegates to command handlers
+ * Enhanced with verbosity control (task 9.3.5)
  *
  * Note: This file is required by bin/transcriptor after environment loaded
  * Do not add shebang or environment loading here
  */
 
 const { program } = require('commander');
+const { setVerbosity, LogLevel } = require('./utils/Logger');
 
 // Load version from package.json dynamically
 const { version } = require('../package.json');
@@ -33,11 +35,34 @@ function asyncHandler(fn) {
   };
 }
 
-// Configure program metadata
+// Configure program metadata with global verbosity options
 program
   .name('transcriptor')
   .description('YouTube transcript extraction and management tool')
-  .version(version);
+  .version(version)
+  .option('-q, --quiet', 'Suppress all output except errors')
+  .option('-v, --verbose', 'Show detailed operation logs');
+
+/**
+ * Setup verbosity based on command line flags
+ * Must run before any command execution
+ */
+function setupVerbosity() {
+  const opts = program.opts();
+
+  // Validate mutually exclusive flags
+  if (opts.quiet && opts.verbose) {
+    console.error('Error: --quiet and --verbose are mutually exclusive');
+    process.exit(1);
+  }
+
+  if (opts.quiet) {
+    setVerbosity(LogLevel.ERROR);
+  } else if (opts.verbose) {
+    setVerbosity(LogLevel.VERBOSE);
+  }
+  // Default is LogLevel.INFO (already set in Logger)
+}
 
 /**
  * Setup all command handlers
@@ -110,10 +135,16 @@ function setupCommands() {
 }
 
 // Parse command line arguments
-// Ensure commands registered before parsing
+// Setup verbosity BEFORE executing commands (critical for preAction hook)
 (async () => {
   try {
     setupCommands();
+
+    // Use preAction hook to set verbosity before any command runs
+    program.hook('preAction', (thisCommand) => {
+      setupVerbosity();
+    });
+
     await program.parseAsync(process.argv);
   } catch (error) {
     console.error('Fatal error:', error.message);

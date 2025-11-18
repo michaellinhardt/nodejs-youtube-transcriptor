@@ -5,7 +5,8 @@
 
 const StorageService = require('../services/StorageService');
 const pathResolver = require('../utils/pathResolver');
-const { calculateStatistics, formatSize } = require('../utils/StatisticsCalculator');
+const { calculateStatisticsFromMetadata, formatSize } = require('../utils/StatisticsCalculator');
+const { logger } = require('../utils/Logger');
 
 /**
  * Execute data command
@@ -15,21 +16,17 @@ const { calculateStatistics, formatSize } = require('../utils/StatisticsCalculat
  */
 async function dataCommand() {
   let storage;
-  let registry;
 
   try {
     // Initialize storage service
     storage = new StorageService(pathResolver);
     await storage.initialize();
-
-    // Load registry (may be empty for new installations)
-    registry = await storage.loadRegistry();
   } catch (error) {
     handleInitializationError(error);
     return;
   }
 
-  // Calculate statistics
+  // Calculate statistics (optimized with metadata cache)
   let stats;
   try {
     const storagePath = pathResolver.getStoragePath();
@@ -39,16 +36,25 @@ async function dataCommand() {
       throw new Error('Path resolver returned invalid storage path');
     }
 
-    stats = await calculateStatistics(registry, storagePath);
+    // Use optimized metadata-only calculation
+    logger.verbose('Using cached metadata for statistics calculation');
+    const metadata = await storage.loadRegistryMetadata();
+    stats = await calculateStatisticsFromMetadata(metadata, storagePath);
 
     // Guard: Validate statistics result (BUG FIX)
     if (!stats || typeof stats !== 'object') {
       throw new Error('Statistics calculation returned invalid result');
     }
+
+    // Log cache statistics in verbose mode
+    if (logger.isVerbose()) {
+      const cacheStats = storage.cache.getStats();
+      logger.debug(cacheStats, 'Cache Statistics');
+    }
   } catch (error) {
-    console.error('Failed to calculate statistics:', error.message);
+    logger.error('Failed to calculate statistics:', error.message);
     if (process.env.NODE_ENV !== 'production') {
-      console.error('Stack trace:', error.stack);
+      logger.error('Stack trace:', error.stack);
     }
     process.exit(1);
   }
@@ -62,13 +68,13 @@ async function dataCommand() {
  */
 function handleInitializationError(error) {
   if (error.message.includes('corrupted')) {
-    console.error('Error: Registry file is corrupted');
-    console.error('Run cleanup or manually delete ~/.transcriptor/data.json');
+    logger.error('Error: Registry file is corrupted');
+    logger.error('Run cleanup or manually delete ~/.transcriptor/data.json');
   } else if (error.message.includes('Permission denied')) {
-    console.error('Error: Cannot access storage directory');
-    console.error('Check permissions for ~/.transcriptor');
+    logger.error('Error: Cannot access storage directory');
+    logger.error('Check permissions for ~/.transcriptor');
   } else {
-    console.error('Initialization failed:', error.message);
+    logger.error('Initialization failed:', error.message);
   }
   process.exit(1);
 }
@@ -82,12 +88,12 @@ function handleInitializationError(error) {
 function displayStatistics(stats) {
   // Guard: Validate stats object structure (BUG FIX)
   if (!stats || typeof stats !== 'object') {
-    console.error('Invalid statistics object provided to display');
+    logger.error('Invalid statistics object provided to display');
     return;
   }
 
   // Align output format with process.js command style
-  console.log('\n=== Transcriptor Repository Statistics ===\n');
+  logger.info('\n=== Transcriptor Repository Statistics ===\n');
 
   // Use safe defaults if fields missing (BUG FIX)
   const total = typeof stats.total === 'number' ? stats.total : 0;
@@ -95,23 +101,23 @@ function displayStatistics(stats) {
   const oldest = stats.oldest || null;
   const newest = stats.newest || null;
 
-  console.log(`Total transcripts: ${total}`);
-  console.log(`Storage size:      ${formatSize(size)}`);
+  logger.info(`Total transcripts: ${total}`);
+  logger.info(`Storage size:      ${formatSize(size)}`);
 
   // Guard: Explicit null checks for dates (BUG FIX)
   if (oldest !== null && newest !== null) {
-    console.log(`Oldest:            ${oldest}`);
-    console.log(`Newest:            ${newest}`);
+    logger.info(`Oldest:            ${oldest}`);
+    logger.info(`Newest:            ${newest}`);
   } else if (total === 0) {
-    console.log('Oldest:            N/A (no transcripts)');
-    console.log('Newest:            N/A (no transcripts)');
+    logger.info('Oldest:            N/A (no transcripts)');
+    logger.info('Newest:            N/A (no transcripts)');
   } else {
     // Edge case: transcripts exist but no valid dates
-    console.log('Oldest:            N/A (date unavailable)');
-    console.log('Newest:            N/A (date unavailable)');
+    logger.info('Oldest:            N/A (date unavailable)');
+    logger.info('Newest:            N/A (date unavailable)');
   }
 
-  console.log(''); // Trailing blank line for readability
+  logger.info(''); // Trailing blank line for readability
 }
 
 module.exports = dataCommand;

@@ -161,6 +161,10 @@ Transcriptor requires:
 
 ## Commands
 
+All commands support verbosity flags:
+- `--quiet` or `-q`: Suppress all output except errors
+- `--verbose` or `-v`: Show detailed operation logs
+
 ### Main Command: Process Transcripts
 
 **Purpose:** Extract transcripts from YouTube URLs listed in `youtube.md` file.
@@ -168,7 +172,7 @@ Transcriptor requires:
 **Syntax:**
 
 ```bash
-transcriptor
+transcriptor [--quiet|--verbose]
 ```
 
 **Prerequisites:**
@@ -201,7 +205,7 @@ Command:
 $ transcriptor
 ```
 
-Output:
+Output (default):
 
 ```
 Processing youtube.md...
@@ -210,7 +214,14 @@ Processing youtube.md...
 Complete: 2 processed, 0 errors, 1 cached
 ```
 
-Result: `./transcripts/` folder created with two symbolic links pointing to centralized storage.
+Output (with progress indicator for large batches):
+
+```
+Processing URLs: [=========================     ] 50% (5/10) dGw3k2... - 15s remaining
+Processing URLs complete: 10 items in 23.4s
+```
+
+Result: `./transcripts/` folder created with symbolic links pointing to centralized storage.
 
 **Notes:**
 
@@ -269,8 +280,15 @@ COMMANDS:
 **Syntax:**
 
 ```bash
-transcriptor data
+transcriptor data [--quiet|--verbose]
 ```
+
+**Verbose Mode Features:**
+
+With `--verbose` flag, displays additional cache statistics:
+- Entries cached in memory
+- Cache hit/miss ratio
+- Estimated memory usage
 
 **Example:**
 
@@ -305,7 +323,7 @@ Newest transcript: 2024-11-19
 **Syntax:**
 
 ```bash
-transcriptor clean YYYY-MM-DD
+transcriptor clean YYYY-MM-DD [--quiet|--verbose]
 ```
 
 **Parameters:**
@@ -448,7 +466,7 @@ Transcriptor creates **symbolic links** from project directories to centralized 
 
 ### Registry System
 
-The registry (`~/.transcriptor/data.json`) tracks all transcripts and their usage:
+The registry (`~/.transcriptor/data.json`) tracks all transcripts and their usage with intelligent caching:
 
 **Schema:**
 
@@ -476,6 +494,13 @@ The registry (`~/.transcriptor/data.json`) tracks all transcripts and their usag
 - Link cleanup (remove all links when transcript deleted)
 - Statistics calculation (count, date range)
 - Integrity validation (detect orphaned entries)
+
+**Performance Optimization:**
+
+- Metadata-only loading for statistics (avoids parsing full registry)
+- LRU cache with 1000 entry limit
+- O(1) entry lookup via in-memory Map
+- Automatic cache invalidation on writes
 
 ### Crash Recovery
 
@@ -785,6 +810,55 @@ SymbolicLink C:\Users\username\.transcriptor\transcripts\dQw4w9WgXcQ.md
 $ transcriptor
 $ readlink transcripts/dQw4w9WgXcQ.md
 /home/username/.transcriptor/transcripts/dQw4w9WgXcQ.md
+```
+
+## Advanced Features
+
+### Installation Scripts
+
+Use automated installation/uninstallation scripts for better control:
+
+```bash
+# Install globally with validation
+npm run install:global
+
+# Uninstall with data retention options
+npm run uninstall:global
+```
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete deployment guide.
+
+### Performance Profiling
+
+Enable profiling for performance analysis:
+
+```bash
+PROFILE=true NODE_ENV=development transcriptor --verbose
+```
+
+### Verbosity Examples
+
+**Default output:**
+```bash
+transcriptor
+# Shows essential operation feedback
+```
+
+**Quiet mode (automation):**
+```bash
+transcriptor --quiet
+# Only errors displayed, exit code indicates success/failure
+```
+
+**Verbose mode (debugging):**
+```bash
+transcriptor --verbose
+# Shows:
+# - Cache hit/miss details
+# - API request/response info
+# - File system operations
+# - Performance timing
+# - Memory usage statistics
 ```
 
 ## Troubleshooting
