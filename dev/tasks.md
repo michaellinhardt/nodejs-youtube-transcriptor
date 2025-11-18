@@ -207,11 +207,11 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
 
 ## 8.0 Error Handling & Recovery
 <!-- Estimated: 8 hours total | Depends on: 6.0 -->
-- [ ] 8.1 File system error handling (implements TR-13)
+- [x] 8.1 File system error handling (implements TR-13)
   - [x] 8.1.1 Handle ENOENT (create missing directories) (StorageService, LinkManager)
   - [x] 8.1.2 Handle EACCES (permission errors) (all services)
   - [x] 8.1.3 Handle EEXIST (overwrite scenarios) (atomic write, ensureDir)
-  - [ ] 8.1.4 Handle EINVAL (invalid paths) [PLAN CREATED: plan_251119_8.1_fileSystemErrors.md]
+  - [x] 8.1.4 Handle EINVAL (invalid paths)
 - [x] 8.2 Process error recovery (implements FR-10)
   - [x] 8.2.1 Continue processing after individual failures (clean.js, process.js)
   - [x] 8.2.2 Skip failed URLs and log errors (TranscriptService.processBatch)
@@ -245,15 +245,3 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [ ] 9.4.2 Implement progress indicators
   - [ ] 9.4.3 Add verbose/quiet mode options
   - [ ] 9.4.4 Profile and optimize bottlenecks
-
-## 10.0 Future Enhancements (Optional)
-<!-- Post-MVP Features -->
-- [ ] 10.1 Batch processing improvements
-  - [ ] 10.1.1 Add concurrent API requests option
-  - [ ] 10.1.2 Implement queue management
-  - [ ] 10.1.3 Add resume capability for interrupted runs
-- [ ] 10.2 Advanced features
-  - [ ] 10.2.1 Add transcript search functionality
-  - [ ] 10.2.2 Implement transcript export formats
-  - [ ] 10.2.3 Add duplicate detection
-  - [ ] 10.2.4 Create transcript metadata enrichment

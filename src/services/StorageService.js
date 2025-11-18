@@ -362,6 +362,13 @@ class StorageService {
       throw new Error(`Permission denied ${operation} transcript ${videoId}`);
     }
 
+    if (error.code === 'EINVAL') {
+      throw new Error(
+        `Invalid path for transcript ${videoId}. ` +
+        'Path may contain unsupported characters or exceed length limits.'
+      );
+    }
+
     // Re-throw with original context for unexpected errors
     throw error;
   }
@@ -380,6 +387,11 @@ class StorageService {
 
     if (error.code === 'EACCES' || error.code === 'EPERM') {
       console.warn(`Permission denied checking transcript ${videoId}`);
+      return false;
+    }
+
+    if (error.code === 'EINVAL') {
+      console.warn(`Invalid path for transcript ${videoId}: ${error.message}`);
       return false;
     }
 
@@ -406,6 +418,13 @@ class StorageService {
 
     if (error.code === 'EACCES') {
       throw new Error(`Permission denied deleting transcript ${videoId}`);
+    }
+
+    if (error.code === 'EINVAL') {
+      throw new Error(
+        `Invalid path for transcript ${videoId}. ` +
+        'Path may contain unsupported characters or exceed length limits.'
+      );
     }
 
     throw new Error(`Failed to delete transcript ${videoId}: ${error.message}`);

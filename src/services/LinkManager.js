@@ -107,6 +107,15 @@ class LinkManager {
         );
       }
 
+      if (error.code === 'EINVAL') {
+        throw new Error(
+          `Invalid path for symlink creation (${videoId}).\n` +
+          `Source: ${sourcePath}\n` +
+          `Target: ${targetPath}\n` +
+          'Path may contain unsupported characters, null bytes, or create circular reference.'
+        );
+      }
+
       // Platform-agnostic error
       throw new Error(`Symlink creation failed for ${videoId}: ${error.message}`);
     }
@@ -195,6 +204,14 @@ class LinkManager {
           status: 'permission_denied',
           canProceed: false,
           message: `Permission denied accessing target path: ${targetPath}`
+        };
+      }
+
+      if (error.code === 'EINVAL') {
+        return {
+          status: 'invalid_path',
+          canProceed: false,
+          message: `Invalid path format: ${targetPath}. May contain unsupported characters.`
         };
       }
 
@@ -303,6 +320,13 @@ class LinkManager {
 
       if (error.code === 'EACCES' || error.code === 'EPERM') {
         throw new Error(`Permission denied removing link: ${linkPath}`);
+      }
+
+      if (error.code === 'EINVAL') {
+        throw new Error(
+          `Invalid path for link removal: ${linkPath}. ` +
+          'Path may contain unsupported characters.'
+        );
       }
 
       throw error;
