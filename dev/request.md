@@ -1,6 +1,4 @@
-![[../../../11. CLAUDE-CODE/claude-agents/agt-doc-overview]]
-
-# My Request
+# My Project Description
 
 ## Task
 
