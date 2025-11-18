@@ -17,7 +17,6 @@ class URLParser {
   static MAX_URL_COUNT = 1000; // TR-Performance limit
   static ALLOWED_SCHEMES = ['http:', 'https:', '']; // Empty string for protocol-less URLs
 
-
   /**
    * Creates URLParser instance
    * @param {string} [inputFile='youtube.md'] - Input filename to parse
@@ -49,7 +48,7 @@ class URLParser {
     } catch (error) {
       throw new Error(
         `Security validation failed: ${error.message}\n` +
-        `Ensure ${this.inputFile} is in the working directory`
+          `Ensure ${this.inputFile} is in the working directory`
       );
     }
 
@@ -62,27 +61,28 @@ class URLParser {
       if (error.code === 'ENOENT') {
         throw new Error(
           `YouTube URL file not found: ${filePath}\n` +
-          `Please create ${this.inputFile} with one YouTube URL per line`
+            `Please create ${this.inputFile} with one YouTube URL per line`
         );
       }
 
       if (error.code === 'EACCES') {
         throw new Error(
-          `Permission denied reading ${filePath}\n` +
-          `Check file permissions and try again`
+          `Permission denied reading ${filePath}\n` + `Check file permissions and try again`
         );
       }
 
       if (error.code === 'EISDIR') {
         throw new Error(
           `Path is a directory, not a file: ${filePath}\n` +
-          `Expected a text file named ${this.inputFile}`
+            `Expected a text file named ${this.inputFile}`
         );
       }
 
-      if (error.message.includes('File too large') ||
-          error.message.includes('Invalid file format') ||
-          error.message.includes('Security validation')) {
+      if (
+        error.message.includes('File too large') ||
+        error.message.includes('Invalid file format') ||
+        error.message.includes('Security validation')
+      ) {
         throw error;
       }
 
@@ -119,7 +119,7 @@ class URLParser {
     if (stats.size > URLParser.MAX_FILE_SIZE) {
       throw new Error(
         `File too large: ${(stats.size / 1024 / 1024).toFixed(2)}MB exceeds ` +
-        `${URLParser.MAX_FILE_SIZE / 1024 / 1024}MB limit`
+          `${URLParser.MAX_FILE_SIZE / 1024 / 1024}MB limit`
       );
     }
   }
@@ -186,7 +186,7 @@ class URLParser {
       commentLines: 0,
       validUrls: 0,
       invalidUrls: 0,
-      duplicates: 0
+      duplicates: 0,
     };
 
     for (const line of lines) {
@@ -195,7 +195,7 @@ class URLParser {
       if (videoIds.length >= URLParser.MAX_URL_COUNT) {
         console.warn(
           `[URLParser] Maximum URL count (${URLParser.MAX_URL_COUNT}) reached. ` +
-          `Remaining lines will be ignored.`
+            `Remaining lines will be ignored.`
         );
         break;
       }
@@ -270,7 +270,9 @@ class URLParser {
     }
 
     if (!this.isValidScheme(sanitizedUrl)) {
-      console.warn(`[URLParser] Skipping URL with invalid scheme: ${sanitizedUrl.substring(0, 100)}`);
+      console.warn(
+        `[URLParser] Skipping URL with invalid scheme: ${sanitizedUrl.substring(0, 100)}`
+      );
       return null;
     }
 
@@ -317,7 +319,6 @@ class URLParser {
 
       console.warn(`[URLParser] Extracted ID failed validation: ${videoId}`);
       return null;
-
     } catch (error) {
       console.warn(`[URLParser] Regex error on line: ${error.message}`);
       return null;
@@ -331,8 +332,11 @@ class URLParser {
    */
   isValidScheme(url) {
     try {
-      const testUrl = url.startsWith('//') ? `http:${url}` :
-                      url.match(/^https?:\/\//) ? url : `http://${url}`;
+      const testUrl = url.startsWith('//')
+        ? `http:${url}`
+        : url.match(/^https?:\/\//)
+          ? url
+          : `http://${url}`;
 
       const parsed = new URL(testUrl);
       return URLParser.ALLOWED_SCHEMES.includes(parsed.protocol);

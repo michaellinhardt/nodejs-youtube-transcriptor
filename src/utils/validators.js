@@ -13,7 +13,9 @@
  * @returns {boolean} True if valid format, false otherwise
  */
 function isValidVideoId(id) {
-  if (typeof id !== 'string') return false;
+  if (typeof id !== 'string') {
+    return false;
+  }
   return /^[A-Za-z0-9_-]{11}$/.test(id);
 }
 
@@ -26,11 +28,15 @@ function isValidVideoId(id) {
  * @returns {boolean} True if valid format and calendar date, false otherwise
  */
 function isValidDate(dateString) {
-  if (typeof dateString !== 'string') return false;
+  if (typeof dateString !== 'string') {
+    return false;
+  }
 
   // Check format and extract components
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString);
-  if (!match) return false;
+  if (!match) {
+    return false;
+  }
 
   // Parse components
   const year = parseInt(match[1], 10);
@@ -38,17 +44,27 @@ function isValidDate(dateString) {
   const day = parseInt(match[3], 10);
 
   // Validate ranges
-  if (month < 1 || month > 12) return false;
-  if (day < 1 || day > 31) return false;
+  if (month < 1 || month > 12) {
+    return false;
+  }
+  if (day < 1 || day > 31) {
+    return false;
+  }
 
   // Create date and verify no coercion occurred
   // month is 0-indexed in Date constructor
   const date = new Date(year, month - 1, day);
 
   // If JavaScript coerced the date, components won't match
-  if (date.getFullYear() !== year) return false;
-  if (date.getMonth() !== month - 1) return false;
-  if (date.getDate() !== day) return false;
+  if (date.getFullYear() !== year) {
+    return false;
+  }
+  if (date.getMonth() !== month - 1) {
+    return false;
+  }
+  if (date.getDate() !== day) {
+    return false;
+  }
 
   return !isNaN(date.getTime());
 }
@@ -81,7 +97,7 @@ function assertValidVideoId(id) {
   if (!isValidVideoId(id)) {
     throw new Error(
       `Invalid video ID format: "${id}". ` +
-      'Expected 11 alphanumeric characters, dashes, or underscores.'
+        'Expected 11 alphanumeric characters, dashes, or underscores.'
     );
   }
 }
@@ -101,8 +117,7 @@ function assertValidVideoId(id) {
 function assertValidDate(dateString) {
   if (!isValidDate(dateString)) {
     throw new Error(
-      `Invalid date format: "${dateString}". ` +
-      'Expected YYYY-MM-DD with valid calendar date.'
+      `Invalid date format: "${dateString}". ` + 'Expected YYYY-MM-DD with valid calendar date.'
     );
   }
 }
@@ -112,5 +127,5 @@ module.exports = {
   isValidDate,
   sanitizeVideoId,
   assertValidVideoId,
-  assertValidDate
+  assertValidDate,
 };

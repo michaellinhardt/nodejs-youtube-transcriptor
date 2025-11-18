@@ -53,15 +53,10 @@ example:
 
 ```json
 {
-  "Jhxlewf83":
-    {
-      date_added: "2025-11-20",
-      links: [
-          '~/Download/transcripts',
-          '~/project_one/transcripts',
-          '~/project_two/transcripts',
-      ],
-    },
+  "Jhxlewf83": {
+    "date_added": "2025-11-20",
+    "links": ["~/Download/transcripts", "~/project_one/transcripts", "~/project_two/transcripts"]
+  }
 }
 ```
 
@@ -85,7 +80,6 @@ Newest transcript added: 2025-11-20
 `transcriptor clean YYYY-MM-DD` will remove from data.json all the entry older than the date given, excluding the date given itself and it will also delete the md file associated. It will also delete all links generated.
 
 To delete links, if the youtube ID is `Jhxlewf83` and the links array is:
-
 
 ```json
       links: [

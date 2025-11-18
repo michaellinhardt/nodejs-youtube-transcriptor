@@ -19,10 +19,10 @@ Entry: bin/transcriptor
 
 ```yaml
 Required:
-  commander: ^12.0.0  # CLI framework
-  axios: ^1.7.0       # HTTP client
-  fs-extra: ^11.0.0   # File operations
-  dotenv: ^16.0.0     # Environment vars
+  commander: ^12.0.0 # CLI framework
+  axios: ^1.7.0 # HTTP client
+  fs-extra: ^11.0.0 # File operations
+  dotenv: ^16.0.0 # Environment vars
 ```
 
 ## Architecture
@@ -88,7 +88,7 @@ Storage:
 ```yaml
 Endpoint: POST https://api.scrape-creators.com/transcript
 Headers:
-  x-api-key: {SCRAPE_CREATORS_API_KEY}
+  x-api-key: { SCRAPE_CREATORS_API_KEY }
 Request:
   url: string|youtube_url
 Response:
@@ -286,9 +286,9 @@ CalculateStats:
 
 ```yaml
 Limits:
-  max_concurrent: 1  # Sequential processing
-  file_size: 10MB    # Max transcript size
-  url_batch: 1000    # Max URLs per run
+  max_concurrent: 1 # Sequential processing
+  file_size: 10MB # Max transcript size
+  url_batch: 1000 # Max URLs per run
   api_timeout: 30s
   retry_delay: [1s, 2s, 4s]
 ```
@@ -312,7 +312,7 @@ SaveRegistry:
   trigger: after_each_operation
   format: JSON.stringify(data, null, 2)
   method: atomic_write
-  backup: none  # Immediate write strategy
+  backup: none # Immediate write strategy
 ```
 
 ### TR-17: Transcript Storage (implements FR-2.3)

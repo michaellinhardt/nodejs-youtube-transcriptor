@@ -54,13 +54,13 @@ function load() {
  */
 function validate() {
   const requiredKeys = ['SCRAPE_CREATORS_API_KEY'];
-  const missing = requiredKeys.filter(key => !process.env[key]);
+  const missing = requiredKeys.filter((key) => !process.env[key]);
 
   if (missing.length > 0) {
     console.error(`Error: Missing required environment variables: ${missing.join(', ')}`);
     console.error('');
     console.error('Please add the following to your .env file:');
-    missing.forEach(key => {
+    missing.forEach((key) => {
       console.error(`  ${key}=your_value_here`);
     });
     console.error('');
@@ -78,8 +78,8 @@ function getApiKey() {
   if (!key || typeof key !== 'string' || key.trim() === '') {
     throw new Error(
       'SCRAPE_CREATORS_API_KEY not set. ' +
-      'This is required even in test environments when making API calls. ' +
-      'Add it to your .env file.'
+        'This is required even in test environments when making API calls. ' +
+        'Add it to your .env file.'
     );
   }
   return key;
@@ -88,5 +88,5 @@ function getApiKey() {
 module.exports = {
   load,
   validate,
-  getApiKey
+  getApiKey,
 };

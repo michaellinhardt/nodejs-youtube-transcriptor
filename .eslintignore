@@ -1,0 +1,13 @@
+node_modules
+dist
+build
+.next
+.nuxt
+out
+coverage
+.nyc_output
+.env
+.env.*
+!.env.example
+package-lock.json
+yarn.lock

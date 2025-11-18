@@ -14,11 +14,11 @@ const YOUTUBE_URL_PATTERNS = {
   SHORT_LINK: /(?:youtu\.be\/)([^&\s?]+)/,
   WATCH_URL: /(?:youtube\.com\/watch\?v=)([^&\s]+)/,
   EMBED_URL: /(?:youtube\.com\/embed\/)([^&\s?]+)/,
-  VIDEO_URL: /(?:youtube\.com\/v\/)([^&\s?]+)/
+  VIDEO_URL: /(?:youtube\.com\/v\/)([^&\s?]+)/,
 };
 
 module.exports = {
   VIDEO_ID_LENGTH,
   VIDEO_ID_PATTERN,
-  YOUTUBE_URL_PATTERNS
+  YOUTUBE_URL_PATTERNS,
 };

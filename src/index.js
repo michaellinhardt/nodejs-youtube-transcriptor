@@ -9,7 +9,6 @@
  */
 
 const { program } = require('commander');
-const path = require('path');
 
 // Load version from package.json dynamically
 const { version } = require('../package.json');
@@ -23,7 +22,7 @@ const { version } = require('../package.json');
  * @returns {Function} Wrapped handler with error handling
  */
 function asyncHandler(fn) {
-  return async function(...args) {
+  return async function (...args) {
     try {
       await fn(...args);
     } catch (error) {
@@ -47,8 +46,8 @@ program
 function setupCommands() {
   // Default action: process youtube.md file in current directory
   // Implements FR-8.1, TR-1
-  program
-    .action(asyncHandler(async () => {
+  program.action(
+    asyncHandler(async () => {
       let processCommand;
       try {
         processCommand = require('./commands/process');
@@ -56,7 +55,8 @@ function setupCommands() {
         throw new Error(`Failed to load process command: ${error.message}`);
       }
       await processCommand();
-    }));
+    })
+  );
 
   // Help command: display comprehensive usage information
   // Implements FR-8.2, TR-2
@@ -79,30 +79,34 @@ function setupCommands() {
   program
     .command('data')
     .description('Display repository statistics and metrics')
-    .action(asyncHandler(async () => {
-      let dataCommand;
-      try {
-        dataCommand = require('./commands/data');
-      } catch (error) {
-        throw new Error(`Failed to load data command: ${error.message}`);
-      }
-      await dataCommand();
-    }));
+    .action(
+      asyncHandler(async () => {
+        let dataCommand;
+        try {
+          dataCommand = require('./commands/data');
+        } catch (error) {
+          throw new Error(`Failed to load data command: ${error.message}`);
+        }
+        await dataCommand();
+      })
+    );
 
   // Clean command: remove old transcripts by date
   // Implements FR-6, FR-8.4, TR-4
   program
     .command('clean <date>')
     .description('Remove transcripts older than specified date (YYYY-MM-DD)')
-    .action(asyncHandler(async (date) => {
-      let cleanCommand;
-      try {
-        cleanCommand = require('./commands/clean');
-      } catch (error) {
-        throw new Error(`Failed to load clean command: ${error.message}`);
-      }
-      await cleanCommand(date);
-    }));
+    .action(
+      asyncHandler(async (date) => {
+        let cleanCommand;
+        try {
+          cleanCommand = require('./commands/clean');
+        } catch (error) {
+          throw new Error(`Failed to load clean command: ${error.message}`);
+        }
+        await cleanCommand(date);
+      })
+    );
 }
 
 // Parse command line arguments

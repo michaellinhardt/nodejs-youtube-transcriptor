@@ -54,7 +54,7 @@ class LinkManager {
     const targetPath = path.join(targetDir, `${videoId}.md`);
 
     // Validate source exists
-    if (!await fs.pathExists(sourcePath)) {
+    if (!(await fs.pathExists(sourcePath))) {
       throw new Error(`Source transcript not found: ${videoId} at ${sourcePath}`);
     }
 
@@ -72,9 +72,7 @@ class LinkManager {
     const validation = await this.validateTarget(targetPath);
 
     if (!validation.canProceed) {
-      throw new Error(
-        `Cannot create symlink: ${validation.message}\nPath: ${targetPath}`
-      );
+      throw new Error(`Cannot create symlink: ${validation.message}\nPath: ${targetPath}`);
     }
 
     // Log if overwriting existing symlink
@@ -93,26 +91,26 @@ class LinkManager {
       return {
         success: true,
         path: targetPath,
-        replaced: validation.status !== 'none'
+        replaced: validation.status !== 'none',
       };
     } catch (error) {
       // Windows-specific guidance per TR-9 requirements
       if (error.code === 'EPERM' && process.platform === 'win32') {
         throw new Error(
           'Symbolic link creation requires elevated privileges on Windows.\n' +
-          'Solutions:\n' +
-          '1. Enable Developer Mode (Settings > Update & Security > For Developers)\n' +
-          '2. Run terminal as Administrator\n' +
-          'See: https://docs.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development'
+            'Solutions:\n' +
+            '1. Enable Developer Mode (Settings > Update & Security > For Developers)\n' +
+            '2. Run terminal as Administrator\n' +
+            'See: https://docs.microsoft.com/en-us/windows/apps/get-started/enable-your-device-for-development'
         );
       }
 
       if (error.code === 'EINVAL') {
         throw new Error(
           `Invalid path for symlink creation (${videoId}).\n` +
-          `Source: ${sourcePath}\n` +
-          `Target: ${targetPath}\n` +
-          'Path may contain unsupported characters, null bytes, or create circular reference.'
+            `Source: ${sourcePath}\n` +
+            `Target: ${targetPath}\n` +
+            'Path may contain unsupported characters, null bytes, or create circular reference.'
         );
       }
 
@@ -155,7 +153,7 @@ class LinkManager {
               status: 'broken_symlink',
               canProceed: true,
               message: 'Broken symlink will be replaced',
-              existing: linkTarget
+              existing: linkTarget,
             };
           }
 
@@ -163,34 +161,34 @@ class LinkManager {
             status: 'symlink',
             canProceed: true,
             existing: linkTarget,
-            message: 'Valid symlink will be replaced if different source'
+            message: 'Valid symlink will be replaced if different source',
           };
         } catch (readlinkError) {
           // Symlink exists but readlink failed (permission issue)
           return {
             status: 'broken_symlink',
             canProceed: true,
-            message: `Symlink unreadable (${readlinkError.code}), will be replaced`
+            message: `Symlink unreadable (${readlinkError.code}), will be replaced`,
           };
         }
       } else if (stats.isFile()) {
         return {
           status: 'file',
           canProceed: false,
-          message: 'Regular file exists at target path - manual intervention required'
+          message: 'Regular file exists at target path - manual intervention required',
         };
       } else if (stats.isDirectory()) {
         return {
           status: 'directory',
           canProceed: false,
-          message: 'Directory exists at target path - manual intervention required'
+          message: 'Directory exists at target path - manual intervention required',
         };
       } else {
         // Unknown file type (socket, device, etc.)
         return {
           status: 'unknown',
           canProceed: false,
-          message: `Unknown file type at target path: ${stats.mode}`
+          message: `Unknown file type at target path: ${stats.mode}`,
         };
       }
     } catch (error) {
@@ -203,7 +201,7 @@ class LinkManager {
         return {
           status: 'permission_denied',
           canProceed: false,
-          message: `Permission denied accessing target path: ${targetPath}`
+          message: `Permission denied accessing target path: ${targetPath}`,
         };
       }
 
@@ -211,7 +209,7 @@ class LinkManager {
         return {
           status: 'invalid_path',
           canProceed: false,
-          message: `Invalid path format: ${targetPath}. May contain unsupported characters.`
+          message: `Invalid path format: ${targetPath}. May contain unsupported characters.`,
         };
       }
 
@@ -249,8 +247,8 @@ class LinkManager {
       const dateAdded = new Date().toISOString().split('T')[0]; // YYYY-MM-DD per BR-4
 
       registry[videoId] = {
-        date_added: dateAdded,  // FR-3.2 exact key name
-        links: []
+        date_added: dateAdded, // FR-3.2 exact key name
+        links: [],
       };
     }
 
@@ -264,7 +262,7 @@ class LinkManager {
     if (!datePattern.test(registry[videoId].date_added)) {
       throw new Error(
         `Registry entry has invalid date_added format for ${videoId}: ${registry[videoId].date_added}. ` +
-        'Expected YYYY-MM-DD per BR-4'
+          'Expected YYYY-MM-DD per BR-4'
       );
     }
 
@@ -280,7 +278,7 @@ class LinkManager {
         // Critical: Link created but registry update failed
         throw new Error(
           `Link created but registry update failed for ${videoId}: ${saveError.message}. ` +
-          'Manual cleanup may be required.'
+            'Manual cleanup may be required.'
         );
       }
     } else {
@@ -325,7 +323,7 @@ class LinkManager {
       if (error.code === 'EINVAL') {
         throw new Error(
           `Invalid path for link removal: ${linkPath}. ` +
-          'Path may contain unsupported characters.'
+            'Path may contain unsupported characters.'
         );
       }
 
@@ -361,7 +359,7 @@ class LinkManager {
     const results = {
       removed: 0,
       skipped: 0,
-      errors: []
+      errors: [],
     };
 
     // Process all links (fail-safe: continue on errors)
@@ -377,14 +375,14 @@ class LinkManager {
         results.errors.push({
           path: linkPath,
           error: error.message,
-          code: error.code
+          code: error.code,
         });
       }
     }
 
     // Update registry: Keep only links that failed to delete
-    const failedPaths = results.errors.map(e => e.path);
-    entry.links = entry.links.filter(link => failedPaths.includes(link));
+    const failedPaths = results.errors.map((e) => e.path);
+    entry.links = entry.links.filter((link) => failedPaths.includes(link));
 
     // Save registry if any changes occurred
     if (results.removed > 0 || results.skipped > 0) {
@@ -392,7 +390,9 @@ class LinkManager {
         await this.storage.saveRegistry(registry);
       } catch (saveError) {
         // Critical: Links removed but registry update failed
-        console.error(`[Link] Links removed but registry update failed for ${videoId}: ${saveError.message}`);
+        console.error(
+          `[Link] Links removed but registry update failed for ${videoId}: ${saveError.message}`
+        );
         results.registryUpdateFailed = true;
       }
     }

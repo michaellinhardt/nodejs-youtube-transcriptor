@@ -38,7 +38,9 @@ async function processCommand() {
 
     const apiKey = process.env.SCRAPE_CREATORS_API_KEY;
     if (!apiKey) {
-      throw new Error('SCRAPE_CREATORS_API_KEY not found in environment. Please set it in .env file.');
+      throw new Error(
+        'SCRAPE_CREATORS_API_KEY not found in environment. Please set it in .env file.'
+      );
     }
 
     const apiClient = new APIClient(apiKey);
@@ -74,7 +76,7 @@ async function processCommand() {
         // Optionally show first few errors for debugging
         if (process.env.DEBUG) {
           console.log('  First errors:');
-          validationResults.errors.slice(0, 3).forEach(err => {
+          validationResults.errors.slice(0, 3).forEach((err) => {
             console.log(`    ${err.videoId}: ${err.error}`);
           });
         }
@@ -115,7 +117,6 @@ async function processCommand() {
     displayResults(results, uniqueUrls.length);
 
     return { success: true, results };
-
   } catch (error) {
     console.error('\nError processing transcripts:', error.message);
 
@@ -155,7 +156,9 @@ async function validateInputFile() {
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per TR performance limits
 
   if (stats.size > MAX_FILE_SIZE) {
-    throw new Error(`youtube.md exceeds maximum size (10MB). Current size: ${Math.round(stats.size / 1024 / 1024)}MB`);
+    throw new Error(
+      `youtube.md exceeds maximum size (10MB). Current size: ${Math.round(stats.size / 1024 / 1024)}MB`
+    );
   }
 
   return inputFile;
@@ -264,7 +267,9 @@ function deduplicateUrls(urls) {
   }
 
   if (urls.length !== unique.length) {
-    console.log(`Removed ${urls.length - unique.length} duplicate URL${urls.length - unique.length !== 1 ? 's' : ''}`);
+    console.log(
+      `Removed ${urls.length - unique.length} duplicate URL${urls.length - unique.length !== 1 ? 's' : ''}`
+    );
   }
 
   return unique;
@@ -348,9 +353,7 @@ function displayResults(results, totalUrls) {
     results.errors.forEach((err, index) => {
       // Security: Sanitize URL before logging
       const sanitizedUrl = err.url ? sanitizeForLog(err.url) : 'unknown';
-      const sanitizedError = err.error ?
-        err.error.substring(0, 200) :
-        'unknown error';
+      const sanitizedError = err.error ? err.error.substring(0, 200) : 'unknown error';
 
       console.log(`  ${index + 1}. ${sanitizedUrl}`);
       console.log(`     ${sanitizedError}`);
@@ -363,7 +366,9 @@ function displayResults(results, totalUrls) {
   if (errorCount === 0) {
     console.log('All URLs processed successfully!\n');
   } else if (results.processed > 0) {
-    console.log(`Completed with ${errorCount} error(s). ${results.processed} URL${results.processed !== 1 ? 's' : ''} processed successfully.\n`);
+    console.log(
+      `Completed with ${errorCount} error(s). ${results.processed} URL${results.processed !== 1 ? 's' : ''} processed successfully.\n`
+    );
   } else {
     console.log(`All URLs failed to process. Please check errors above.\n`);
   }

@@ -85,7 +85,7 @@ class MaintenanceService {
       if (!entry || typeof entry !== 'object') {
         stats.errors.push({
           videoId,
-          error: 'Invalid entry structure (not an object)'
+          error: 'Invalid entry structure (not an object)',
         });
         console.warn(`[Maintenance] Skipping invalid entry: ${videoId}`);
         continue;
@@ -101,7 +101,7 @@ class MaintenanceService {
         // FAIL-SAFE: Log and continue on individual validation errors
         stats.errors.push({
           videoId,
-          error: error.message || 'Unknown validation error'
+          error: error.message || 'Unknown validation error',
         });
         console.warn(`[Maintenance] Error checking ${videoId}: ${error.message}`);
       }
@@ -123,13 +123,13 @@ class MaintenanceService {
 
         // BUG PREVENTION: Aggregate link cleanup statistics with null safety
         if (cleanupStats && typeof cleanupStats === 'object') {
-          stats.linksRemoved += (cleanupStats.linksRemoved || 0);
-          stats.linksFailed += (cleanupStats.linksFailed || 0);
+          stats.linksRemoved += cleanupStats.linksRemoved || 0;
+          stats.linksFailed += cleanupStats.linksFailed || 0;
         }
       } catch (error) {
         stats.errors.push({
           videoId,
-          error: error.message || 'Unknown cleanup error'
+          error: error.message || 'Unknown cleanup error',
         });
         console.error(`[Maintenance] Failed to remove ${videoId}: ${error.message}`);
       }
@@ -144,7 +144,7 @@ class MaintenanceService {
         // CRITICAL: Cleanup succeeded but persistence failed
         throw new Error(
           `Registry cleanup succeeded (${stats.orphaned} entries) but save failed: ${error.message}. ` +
-          'Manual registry repair may be required.'
+            'Manual registry repair may be required.'
         );
       }
     }
@@ -165,11 +165,13 @@ class MaintenanceService {
    * @private
    */
   async _removeOrphanedEntry(videoId, entry, registry) {
-    console.log(`[Maintenance] Removing orphaned entry: ${videoId} (added ${entry.date_added || 'unknown'})`);
+    console.log(
+      `[Maintenance] Removing orphaned entry: ${videoId} (added ${entry.date_added || 'unknown'})`
+    );
 
     const cleanupStats = {
       linksRemoved: 0,
-      linksFailed: 0
+      linksFailed: 0,
     };
 
     // 1. Remove all symbolic links via LinkManager
@@ -196,7 +198,7 @@ class MaintenanceService {
         }
         if (Array.isArray(linkResults.errors) && linkResults.errors.length > 0) {
           console.warn(`[Maintenance]   Failed to remove ${linkResults.errors.length} link(s)`);
-          linkResults.errors.forEach(err => {
+          linkResults.errors.forEach((err) => {
             console.warn(`[Maintenance]     ${err.path}: ${err.error}`);
           });
         }

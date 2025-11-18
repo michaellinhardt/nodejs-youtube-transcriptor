@@ -10,7 +10,9 @@ Critical path: 1.0 → 2.1 → 3.1 → 4.1 → 5.1
 High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
 
 ## 1.0 Project Initialization & Setup
+
 <!-- Estimated: 4 hours total -->
+
 - [x] 1.1 Initialize npm package structure
   - [x] 1.1.1 Create package.json with global CLI configuration
   - [x] 1.1.2 Verify src/index.js entry point (existing file with shebang)
@@ -29,10 +31,12 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 1.4.1 Create .env.example file
   - [x] 1.4.2 Bug fixes and resilience improvements
   - [x] 1.4.3 Create .gitignore with proper exclusions
-  - [ ] 1.4.4 Set up ESLint and Prettier configuration
+  - [x] 1.4.4 Set up ESLint and Prettier configuration
 
 ## 2.0 Core Infrastructure Development
+
 <!-- Estimated: 12 hours total | Blocks: 3.0, 4.0, 5.0 -->
+
 - [x] 2.1 Path management system [CRITICAL PATH] (implements TR-10)
   - [x] 2.1.1 Create PathResolver utility for cross-platform paths
   - [x] 2.1.2 Implement home directory resolution
@@ -49,7 +53,9 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 2.3.4 Add version information display
 
 ## 3.0 Storage System Implementation
+
 <!-- Estimated: 16 hours total | Depends on: 2.1 -->
+
 - [x] 3.1 Storage service core [CRITICAL PATH] (implements FR-3)
   - [x] 3.1.1 Create StorageService class structure
   - [x] 3.1.2 Implement initialization operations (TR-19)
@@ -78,7 +84,9 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 3.3.4 Implement file deletion with error handling
 
 ## 4.0 API Integration Layer
+
 <!-- Estimated: 12 hours total | Depends on: 2.2 | High Risk -->
+
 - [x] 4.1 API client setup [CRITICAL PATH] (implements FR-2.1) [BUG FIXES APPLIED 2025-11-19] [REFACTORED 2025-11-19]
   - [x] 4.1.1 Create APIClient service class
   - [x] 4.1.2 Configure axios with base settings
@@ -125,7 +133,9 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 4.3.4 Implement skip logic for 400/500 errors
 
 ## 5.0 Transcript Processing Engine
+
 <!-- Estimated: 20 hours total | Depends on: 3.1, 4.1 -->
+
 - [x] 5.1 URL parsing and validation [CRITICAL PATH] (implements FR-1.1, TR-5)
   - [x] 5.1.1 Create URL parser for youtube.md files
   - [x] 5.1.2 Implement YouTube ID extraction regex
@@ -142,7 +152,7 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 5.3.4 Add cross-platform link compatibility
   - [x] 5.3.5 Complete TranscriptService integration with processBatch
   - [x] 5.3.6 Refactor processVideo to implement explicit TR-7 workflow steps
-  - [x] 5.3.7 Validate registry schema compliance in _trackLink
+  - [x] 5.3.7 Validate registry schema compliance in \_trackLink
   - [x] 5.3.8 Verify cross-platform compatibility with enhanced error messages
   - [x] 5.3.9 Add extractVideoId implementing TR-5 URL parsing
   - [x] 5.3.10 Extract console output formatting to ConsoleFormatter utility
@@ -150,10 +160,10 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 5.3.12 Extract log message templates to LogMessages constants
   - [x] 5.3.13 Extract YouTube constants to YouTubeConstants module
   - [x] 5.3.14 Improve variable naming (isCachedAndValid, transcriptFileExists, errorEntry, errorIndex)
-  - [x] 5.3.15 Extract _getOrFetchTranscript private method with guard clause
-  - [x] 5.3.16 Extract _processSingleUrl private method
-  - [x] 5.3.17 Extract _aggregateBatchResult private method
-  - [x] 5.3.18 Extract _displayBatchSummary private method
+  - [x] 5.3.15 Extract \_getOrFetchTranscript private method with guard clause
+  - [x] 5.3.16 Extract \_processSingleUrl private method
+  - [x] 5.3.17 Extract \_aggregateBatchResult private method
+  - [x] 5.3.18 Extract \_displayBatchSummary private method
   - [x] 5.3.19 Refactor processBatch to use extracted helper methods
   - [x] 5.3.20 Update all console log statements to use LOG_MESSAGES templates
 - [x] 5.4 Processing workflow (implements FR-2.3, TR-7)
@@ -163,7 +173,9 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 5.4.4 Implement registry updates per transcript
 
 ## 6.0 Command Implementations
+
 <!-- Estimated: 16 hours total | Depends on: 5.0 | Can parallel with 7.0 -->
+
 - [x] 6.1 Main command handler (implements FR-8.1, TR-1) [BUG FIXES APPLIED 2025-11-19]
   - [x] 6.1.1 Create process command implementation
   - [x] 6.1.2 Add youtube.md file validation
@@ -171,7 +183,7 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 6.1.4 Add progress output and status reporting
   - [x] 6.1.5 Fix duplicate cache statistics tracking
   - [x] 6.1.6 Add error handling for cache read failures
-  - [x] 6.1.7 Add missing video ID validation in LinkManager._trackLink
+  - [x] 6.1.7 Add missing video ID validation in LinkManager.\_trackLink
   - [x] 6.1.8 Remove unnecessary path traversal check
   - [x] 6.1.9 Add null safety guards in ConsoleFormatter
 - [x] 6.2 Help command (implements FR-8.2, TR-2)
@@ -190,7 +202,9 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 6.4.4 Update registry after cleanup
 
 ## 7.0 Maintenance Features
+
 <!-- Estimated: 12 hours total | Depends on: 3.0 | Can parallel with 6.0 -->
+
 - [x] 7.1 Auto-maintenance system (implements FR-7, TR-14)
   - [x] 7.1.1 Create integrity validation routine
   - [x] 7.1.2 Check registry entries against files
@@ -206,7 +220,9 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 7.3.3 Implement backup before destructive operations (atomic writes per TR-8)
 
 ## 8.0 Error Handling & Recovery
+
 <!-- Estimated: 8 hours total | Depends on: 6.0 -->
+
 - [x] 8.1 File system error handling (implements TR-13)
   - [x] 8.1.1 Handle ENOENT (create missing directories) (StorageService, LinkManager)
   - [x] 8.1.2 Handle EACCES (permission errors) (all services)
@@ -224,17 +240,19 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 8.3.4 Check path traversal attempts (validators.sanitizeVideoId prevents, path.isAbsolute checks)
 
 ## 9.0 Documentation & Deployment
+
 <!-- Estimated: 8 hours total | Depends on: 8.0 -->
-- [ ] 9.1 User documentation
-  - [ ] 9.1.1 Create comprehensive README.md
-  - [ ] 9.1.2 Document installation process
-  - [ ] 9.1.3 Add usage examples
-  - [ ] 9.1.4 Document all commands and options
-- [ ] 9.2 Developer documentation
-  - [ ] 9.2.1 Document API integration details
-  - [ ] 9.2.2 Add architecture diagrams
-  - [ ] 9.2.3 Document data flow
-  - [ ] 9.2.4 Create contribution guidelines
+
+- [x] 9.1 User documentation
+  - [x] 9.1.1 Create comprehensive README.md
+  - [x] 9.1.2 Document installation process
+  - [x] 9.1.3 Add usage examples
+  - [x] 9.1.4 Document all commands and options
+- [x] 9.2 Developer documentation
+  - [x] 9.2.1 Document API integration details
+  - [x] 9.2.2 Add architecture diagrams
+  - [x] 9.2.3 Document data flow
+  - [x] 9.2.4 Create contribution guidelines
 - [ ] 9.3 Deployment preparation
   - [ ] 9.3.1 Test npm link installation
   - [ ] 9.3.2 Verify cross-platform compatibility

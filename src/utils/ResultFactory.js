@@ -23,7 +23,7 @@ class ResultFactory {
       cached: data.cached || false,
       linked: data.linked || false,
       linkPath: data.linkPath || null,
-      replaced: data.replaced || false
+      replaced: data.replaced || false,
     };
   }
 
@@ -38,7 +38,7 @@ class ResultFactory {
       fetched: 0,
       linked: 0,
       failed: 0,
-      errors: []
+      errors: [],
     };
   }
 
@@ -52,7 +52,7 @@ class ResultFactory {
     results.failed++;
     results.errors.push({
       url,
-      error: errorMessage
+      error: errorMessage,
     });
   }
 }

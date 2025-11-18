@@ -15,7 +15,7 @@ class StorageService {
   static REGISTRY_WRITE_OPTIONS = {
     spaces: 2,
     encoding: 'utf8',
-    EOL: '\n'
+    EOL: '\n',
   };
   static MAX_TRANSCRIPT_SIZE_BYTES = 10 * 1024 * 1024; // 10MB (TR specs)
 
@@ -35,7 +35,9 @@ class StorageService {
    * @returns {Promise<void>}
    */
   async initialize() {
-    if (this.initialized) return;
+    if (this.initialized) {
+      return;
+    }
     this.initialized = true;
 
     const storagePath = this.paths.getStoragePath();
@@ -111,14 +113,10 @@ class StorageService {
    */
   throwRegistryReadError(error) {
     if (!error) {
-      throw new Error(
-        'Registry read: Received null error object during file read'
-      );
+      throw new Error('Registry read: Received null error object during file read');
     }
 
-    const isJsonParseError =
-      error.name === 'SyntaxError' ||
-      error.code === 'EJSONPARSE';
+    const isJsonParseError = error.name === 'SyntaxError' || error.code === 'EJSONPARSE';
 
     if (isJsonParseError) {
       const message = error.message || 'unknown JSON parse error';
@@ -138,10 +136,14 @@ class StorageService {
    */
   isValidRegistryStructure(data) {
     try {
-      if (!this.isPlainObject(data)) return false;
+      if (!this.isPlainObject(data)) {
+        return false;
+      }
 
       for (const [videoId, entry] of Object.entries(data)) {
-        if (!this.isValidEntry(videoId, entry)) return false;
+        if (!this.isValidEntry(videoId, entry)) {
+          return false;
+        }
       }
 
       return true;
@@ -156,11 +158,7 @@ class StorageService {
    * @private
    */
   isPlainObject(value) {
-    return (
-      typeof value === 'object' &&
-      value !== null &&
-      !Array.isArray(value)
-    );
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
   /**
@@ -168,11 +166,21 @@ class StorageService {
    * @private
    */
   isValidEntry(videoId, entry) {
-    if (!validators.isValidVideoId(videoId)) return false;
-    if (!this.isValidEntryStructure(entry)) return false;
-    if (!validators.isValidDate(entry.date_added)) return false;
-    if (!this.areLinksValid(entry.links)) return false;
-    if (!this.hasOnlyAllowedKeys(entry)) return false;
+    if (!validators.isValidVideoId(videoId)) {
+      return false;
+    }
+    if (!this.isValidEntryStructure(entry)) {
+      return false;
+    }
+    if (!validators.isValidDate(entry.date_added)) {
+      return false;
+    }
+    if (!this.areLinksValid(entry.links)) {
+      return false;
+    }
+    if (!this.hasOnlyAllowedKeys(entry)) {
+      return false;
+    }
     return true;
   }
 
@@ -182,9 +190,15 @@ class StorageService {
    * @private
    */
   isValidEntryStructure(entry) {
-    if (!this.isPlainObject(entry)) return false;
-    if (!entry.date_added || typeof entry.date_added !== 'string') return false;
-    if (!Array.isArray(entry.links)) return false;
+    if (!this.isPlainObject(entry)) {
+      return false;
+    }
+    if (!entry.date_added || typeof entry.date_added !== 'string') {
+      return false;
+    }
+    if (!Array.isArray(entry.links)) {
+      return false;
+    }
     return true;
   }
 
@@ -194,9 +208,7 @@ class StorageService {
    */
   hasOnlyAllowedKeys(entry) {
     const entryKeys = Object.keys(entry);
-    return entryKeys.every(key =>
-      StorageService.ALLOWED_ENTRY_KEYS.includes(key)
-    );
+    return entryKeys.every((key) => StorageService.ALLOWED_ENTRY_KEYS.includes(key));
   }
 
   /**
@@ -204,8 +216,10 @@ class StorageService {
    * @private
    */
   areLinksValid(links) {
-    return links.every(link => {
-      if (typeof link !== 'string' || link.trim() === '') return false;
+    return links.every((link) => {
+      if (typeof link !== 'string' || link.trim() === '') {
+        return false;
+      }
       return path.isAbsolute(link);
     });
   }
@@ -284,9 +298,7 @@ class StorageService {
     } catch (renameError) {
       // Windows rename fails with EPERM when target exists
       // Some systems use EEXIST for same condition
-      const isRenameConflict =
-        renameError.code === 'EPERM' ||
-        renameError.code === 'EEXIST';
+      const isRenameConflict = renameError.code === 'EPERM' || renameError.code === 'EEXIST';
 
       if (isRenameConflict) {
         await fs.move(tempPath, targetPath, { overwrite: true });
@@ -339,10 +351,7 @@ class StorageService {
    * @returns {string} Absolute path to transcript file
    */
   _getTranscriptPath(videoId) {
-    return path.join(
-      this.paths.getTranscriptsPath(),
-      `${videoId}.md`
-    );
+    return path.join(this.paths.getTranscriptsPath(), `${videoId}.md`);
   }
 
   /**
@@ -365,7 +374,7 @@ class StorageService {
     if (error.code === 'EINVAL') {
       throw new Error(
         `Invalid path for transcript ${videoId}. ` +
-        'Path may contain unsupported characters or exceed length limits.'
+          'Path may contain unsupported characters or exceed length limits.'
       );
     }
 
@@ -423,7 +432,7 @@ class StorageService {
     if (error.code === 'EINVAL') {
       throw new Error(
         `Invalid path for transcript ${videoId}. ` +
-        'Path may contain unsupported characters or exceed length limits.'
+          'Path may contain unsupported characters or exceed length limits.'
       );
     }
 
@@ -553,7 +562,7 @@ class StorageService {
    * @returns {Promise<void>}
    * @throws {Error} Not yet implemented
    */
-  async createSymlink(source, target) {
+  async createSymlink(_source, _target) {
     throw new Error('StorageService.createSymlink not yet implemented');
   }
 

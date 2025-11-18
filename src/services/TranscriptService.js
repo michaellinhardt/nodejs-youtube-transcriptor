@@ -4,7 +4,11 @@ const LinkManager = require('./LinkManager');
 const ConsoleFormatter = require('../utils/ConsoleFormatter');
 const ResultFactory = require('../utils/ResultFactory');
 const { LOG_MESSAGES } = require('../utils/LogMessages');
-const { VIDEO_ID_LENGTH, VIDEO_ID_PATTERN, YOUTUBE_URL_PATTERNS } = require('../utils/YouTubeConstants');
+const {
+  VIDEO_ID_LENGTH,
+  VIDEO_ID_PATTERN,
+  YOUTUBE_URL_PATTERNS,
+} = require('../utils/YouTubeConstants');
 
 /**
  * Transcript Service
@@ -23,7 +27,9 @@ class TranscriptService {
   constructor(storageService, apiClient, pathResolver) {
     // Validate dependencies
     if (!storageService || !apiClient || !pathResolver) {
-      throw new Error('TranscriptService requires StorageService, APIClient, and PathResolver dependencies');
+      throw new Error(
+        'TranscriptService requires StorageService, APIClient, and PathResolver dependencies'
+      );
     }
 
     this.storage = storageService;
@@ -36,7 +42,7 @@ class TranscriptService {
       cacheMisses: 0,
       linksCreated: 0,
       linksFailed: 0,
-      startTime: null
+      startTime: null,
     };
   }
 
@@ -97,7 +103,6 @@ class TranscriptService {
       }
 
       return isCachedAndValid;
-
     } catch (error) {
       // Cache check failure should not block processing
       console.error(LOG_MESSAGES.CACHE_CHECK_FAILED(trimmedId), error.message);
@@ -208,7 +213,7 @@ class TranscriptService {
         // New entry - initialize with date and empty links array
         registry[videoId] = {
           date_added: dateAdded,
-          links: []
+          links: [],
         };
         console.log(LOG_MESSAGES.TRANSCRIPT_ENTRY_CREATED(videoId));
       } else {
@@ -220,7 +225,6 @@ class TranscriptService {
       // Save updated registry atomically (TR-8, TR-16)
       await this.storage.saveRegistry(registry);
       console.log(LOG_MESSAGES.TRANSCRIPT_REGISTERED(videoId));
-
     } catch (error) {
       console.error(LOG_MESSAGES.TRANSCRIPT_REGISTER_FAILED(videoId), error.message);
       throw new Error(`Failed to register transcript ${videoId}: ${error.message}`);
@@ -233,14 +237,10 @@ class TranscriptService {
    */
   getCacheStats() {
     const total = this.stats.cacheHits + this.stats.cacheMisses;
-    const hitRate = total > 0
-      ? ((this.stats.cacheHits / total) * 100).toFixed(1)
-      : 0;
+    const hitRate = total > 0 ? ((this.stats.cacheHits / total) * 100).toFixed(1) : 0;
 
     // Calculate elapsed time if tracking started
-    const elapsedMs = this.stats.startTime
-      ? Date.now() - this.stats.startTime
-      : 0;
+    const elapsedMs = this.stats.startTime ? Date.now() - this.stats.startTime : 0;
 
     const elapsedSeconds = (elapsedMs / 1000).toFixed(1);
 
@@ -250,7 +250,7 @@ class TranscriptService {
       total: total,
       hitRate: `${hitRate}%`,
       elapsedSeconds: elapsedSeconds,
-      elapsedMs: elapsedMs
+      elapsedMs: elapsedMs,
     };
   }
 
@@ -334,7 +334,7 @@ class TranscriptService {
     const absoluteProjectDir = path.resolve(projectDir);
 
     // Step 1-3: Get or fetch transcript
-    const { transcript, wasCached } = await this._getOrFetchTranscript(videoId, videoUrl);
+    const { wasCached } = await this._getOrFetchTranscript(videoId, videoUrl);
 
     // Step 4: Create link
     const linkResult = await this.linkManager.createLink(videoId, absoluteProjectDir);
@@ -347,7 +347,7 @@ class TranscriptService {
       cached: wasCached,
       linked: linkResult.success,
       linkPath: linkResult.path,
-      replaced: linkResult.replaced
+      replaced: linkResult.replaced,
     });
   }
 
@@ -360,7 +360,7 @@ class TranscriptService {
     const formatted = {
       ...ConsoleFormatter.formatStats(cacheStats),
       'Links created': this.stats.linksCreated,
-      'Links failed': this.stats.linksFailed
+      'Links failed': this.stats.linksFailed,
     };
     ConsoleFormatter.displayBox('Processing Summary', formatted);
   }
@@ -397,7 +397,7 @@ class TranscriptService {
 
     throw new Error(
       `Unable to extract valid YouTube video ID from URL: ${trimmedUrl}. ` +
-      `Expected ${VIDEO_ID_LENGTH}-character ID matching pattern ${VIDEO_ID_PATTERN}`
+        `Expected ${VIDEO_ID_LENGTH}-character ID matching pattern ${VIDEO_ID_PATTERN}`
     );
   }
 
@@ -417,7 +417,7 @@ class TranscriptService {
     return {
       success: true,
       wasCached,
-      linked: result.linked
+      linked: result.linked,
     };
   }
 

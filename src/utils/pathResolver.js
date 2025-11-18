@@ -56,7 +56,9 @@ function getLocalTranscriptsPath() {
   try {
     cwd = process.cwd();
   } catch (error) {
-    throw new Error(`Unable to access current directory: ${error.message}. Directory may have been deleted.`);
+    throw new Error(
+      `Unable to access current directory: ${error.message}. Directory may have been deleted.`
+    );
   }
   return path.resolve(cwd, 'transcripts');
 }
@@ -66,5 +68,5 @@ module.exports = {
   getStoragePath,
   getTranscriptsPath,
   getRegistryPath,
-  getLocalTranscriptsPath
+  getLocalTranscriptsPath,
 };

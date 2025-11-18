@@ -7,11 +7,13 @@ const LOG_MESSAGES = {
   CACHE_MISS: (videoId) => `[Cache] MISS for ${videoId}`,
   CACHE_HIT_COUNT: (videoId, count) => `[Cache] HIT for ${videoId} (${count} total hits)`,
   CACHE_MISS_COUNT: (videoId, count) => `[Cache] MISS for ${videoId} (${count} total misses)`,
-  CACHE_ORPHANED: (videoId) => `[Cache] Registry entry exists but file missing for ${videoId} - will refetch`,
+  CACHE_ORPHANED: (videoId) =>
+    `[Cache] Registry entry exists but file missing for ${videoId} - will refetch`,
   CACHE_CHECK_FAILED: (videoId) => `[Cache] Check failed for ${videoId}:`,
 
   TRANSCRIPT_USING_CACHED: (videoId) => `[Transcript] Using cached version for ${videoId}`,
-  TRANSCRIPT_EMPTY_CACHED: (videoId) => `[Transcript] Cached file empty for ${videoId} - refetching`,
+  TRANSCRIPT_EMPTY_CACHED: (videoId) =>
+    `[Transcript] Cached file empty for ${videoId} - refetching`,
   TRANSCRIPT_READ_FAILED: (videoId) => `[Transcript] Cache read failed for ${videoId}:`,
   TRANSCRIPT_FETCHING: (videoId) => `[Transcript] Fetching from API for ${videoId}`,
   TRANSCRIPT_SAVING: (videoId) => `[Transcript] Saving to storage: ${videoId}`,
@@ -34,7 +36,7 @@ const LOG_MESSAGES = {
   PROCESS_NO_URLS: '[Process] No URLs to process',
 
   BATCH_START: (count) => `[Process] Starting batch processing for ${count} URLs`,
-  BATCH_PROJECT_DIR: (dir) => `[Process] Project directory: ${dir}`
+  BATCH_PROJECT_DIR: (dir) => `[Process] Project directory: ${dir}`,
 };
 
 module.exports = { LOG_MESSAGES };

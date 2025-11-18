@@ -22,8 +22,10 @@ try {
  * @returns {string} Sanitized version string
  */
 function sanitizeVersion(ver) {
-  if (typeof ver !== 'string') return 'unknown';
-  return ver.replace(/[^\d\.\-a-zA-Z]/g, '');
+  if (typeof ver !== 'string') {
+    return 'unknown';
+  }
+  return ver.replace(/[^\d.-a-zA-Z]/g, '');
 }
 
 function helpCommand() {
@@ -92,7 +94,9 @@ function helpCommand() {
 
   // Footer section
   console.log('For more information, see project documentation.');
-  console.log('Report issues: https://github.com/michaellinhardt/nodejs-youtube-transcriptor/issues\n');
+  console.log(
+    'Report issues: https://github.com/michaellinhardt/nodejs-youtube-transcriptor/issues\n'
+  );
 }
 
 module.exports = helpCommand;

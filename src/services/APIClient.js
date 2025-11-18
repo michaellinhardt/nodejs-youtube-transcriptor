@@ -5,7 +5,7 @@ const {
   TIMEOUT_ERROR_CODES,
   NETWORK_ERROR_CODES,
   RETRY_CONFIG,
-  RETRY_BUDGET
+  RETRY_BUDGET,
 } = require('../constants/APIClientConstants');
 const ErrorHandler = require('../utils/ErrorHandler');
 const ValidationHelpers = require('../utils/ValidationHelpers');
@@ -65,7 +65,9 @@ class APIClient {
    * @throws {Error} If API key missing, invalid format, or too long
    */
   async initialize() {
-    if (this.initialized) return;
+    if (this.initialized) {
+      return;
+    }
 
     if (this.initializationPromise) {
       return this.initializationPromise;
@@ -116,11 +118,11 @@ class APIClient {
       timeout: API_CLIENT_CONFIG.TIMEOUT_MS,
       headers: {
         'Content-Type': 'application/json',
-        [API_CLIENT_CONFIG.API_KEY_HEADER]: this.apiKey
+        [API_CLIENT_CONFIG.API_KEY_HEADER]: this.apiKey,
       },
       validateStatus: (status) => status >= 200 && status < 300,
       maxRedirects: 0,
-      decompress: true
+      decompress: true,
     });
 
     this.attachInterceptors(client);
@@ -231,7 +233,7 @@ class APIClient {
     }
 
     const requestPromise = this.fetchWithRetry(videoUrl)
-      .then(transcript => {
+      .then((transcript) => {
         const duration = Date.now() - startTime;
         console.log(`[API] Transcript received: ${transcript.length} chars in ${duration}ms`);
         return transcript;
@@ -286,16 +288,10 @@ class APIClient {
    * @returns {Promise<string>} Transcript text
    */
   async executeApiRequest(videoUrl) {
-    const response = await this.httpClient.post(
-      API_CLIENT_CONFIG.ENDPOINT,
-      { url: videoUrl }
-    );
+    const response = await this.httpClient.post(API_CLIENT_CONFIG.ENDPOINT, { url: videoUrl });
 
     if (!response) {
-      throw this.createAppError(
-        ERROR_TYPES.VALIDATION,
-        'API returned null response object'
-      );
+      throw this.createAppError(ERROR_TYPES.VALIDATION, 'API returned null response object');
     }
 
     return this.extractTranscriptText(response);
@@ -349,7 +345,7 @@ class APIClient {
 
     console.warn(
       `[API] Rate limited. Retry ${attempt}/${maxRetries} ` +
-      `after ${delayMs}ms (total elapsed: ${elapsedMs}ms)`
+        `after ${delayMs}ms (total elapsed: ${elapsedMs}ms)`
     );
   }
 
@@ -395,8 +391,7 @@ class APIClient {
    */
   calculateExponentialBackoff(attempt) {
     const baseDelay = Math.round(
-      RETRY_CONFIG.INITIAL_DELAY_MS *
-      Math.pow(RETRY_CONFIG.BACKOFF_MULTIPLIER, attempt - 1)
+      RETRY_CONFIG.INITIAL_DELAY_MS * Math.pow(RETRY_CONFIG.BACKOFF_MULTIPLIER, attempt - 1)
     );
 
     const cappedDelay = Math.min(baseDelay, RETRY_CONFIG.MAX_DELAY_MS);
@@ -411,7 +406,9 @@ class APIClient {
    * @returns {number|null} Validated seconds or null if invalid
    */
   validateRetryAfter(retryAfter) {
-    if (!retryAfter) return null;
+    if (!retryAfter) {
+      return null;
+    }
 
     const retryAfterSeconds = parseInt(retryAfter, 10);
 
@@ -423,7 +420,7 @@ class APIClient {
     if (retryAfterSeconds > RETRY_BUDGET.MAX_RETRY_AFTER_SECONDS) {
       console.warn(
         `[API] Retry-After ${retryAfterSeconds}s exceeds maximum ` +
-        `${RETRY_BUDGET.MAX_RETRY_AFTER_SECONDS}s - capping`
+          `${RETRY_BUDGET.MAX_RETRY_AFTER_SECONDS}s - capping`
       );
       return RETRY_BUDGET.MAX_RETRY_AFTER_SECONDS;
     }
@@ -522,11 +519,9 @@ class APIClient {
     const youtubePattern = /^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//;
     if (!youtubePattern.test(url)) {
       const urlPreview = url.length > 100 ? url.substring(0, 100) + '...' : url;
-      throw this.createAppError(
-        ERROR_TYPES.VALIDATION,
-        'Invalid YouTube URL format',
-        { url: urlPreview }
-      );
+      throw this.createAppError(ERROR_TYPES.VALIDATION, 'Invalid YouTube URL format', {
+        url: urlPreview,
+      });
     }
   }
 
@@ -538,14 +533,14 @@ class APIClient {
    * @throws {Error} If response missing expected fields
    */
   extractTranscriptText(response) {
-    if (!response || !response.data ||
-        response.data === null ||
-        typeof response.data !== 'object' ||
-        Array.isArray(response.data)) {
-      throw this.createAppError(
-        ERROR_TYPES.VALIDATION,
-        'API response missing data object'
-      );
+    if (
+      !response ||
+      !response.data ||
+      response.data === null ||
+      typeof response.data !== 'object' ||
+      Array.isArray(response.data)
+    ) {
+      throw this.createAppError(ERROR_TYPES.VALIDATION, 'API response missing data object');
     }
 
     if (!('transcript_only_text' in response.data)) {
@@ -567,10 +562,7 @@ class APIClient {
     const trimmedText = text.trim();
 
     if (trimmedText === '') {
-      throw this.createAppError(
-        ERROR_TYPES.VALIDATION,
-        'API returned empty transcript text'
-      );
+      throw this.createAppError(ERROR_TYPES.VALIDATION, 'API returned empty transcript text');
     }
 
     const MAX_TRANSCRIPT_LENGTH = 10 * 1024 * 1024;
@@ -625,21 +617,21 @@ class APIClient {
       400: {
         type: ERROR_TYPES.INVALID_REQUEST,
         message: 'Invalid YouTube URL or video unavailable',
-        context: { status, data: errorData }
+        context: { status, data: errorData },
       },
       401: {
         type: ERROR_TYPES.UNAUTHORIZED,
         message: 'API authentication failed - check SCRAPE_CREATORS_API_KEY',
-        context: { status }
+        context: { status },
       },
       429: {
         type: ERROR_TYPES.RATE_LIMITED,
         message: 'API rate limit exceeded',
         context: {
           status,
-          retryAfter: headers['retry-after']
-        }
-      }
+          retryAfter: headers['retry-after'],
+        },
+      },
     };
 
     const serverErrorStatuses = [500, 502, 503];
@@ -693,18 +685,13 @@ class APIClient {
    */
   handleNetworkError(error) {
     if (!error) {
-      return this.createAppError(
-        ERROR_TYPES.NETWORK,
-        'Unknown network error (null error object)'
-      );
+      return this.createAppError(ERROR_TYPES.NETWORK, 'Unknown network error (null error object)');
     }
 
     if (this.isTimeoutError(error)) {
-      return this.createAppError(
-        ERROR_TYPES.TIMEOUT,
-        'Request timeout after 30 seconds',
-        { code: error.code }
-      );
+      return this.createAppError(ERROR_TYPES.TIMEOUT, 'Request timeout after 30 seconds', {
+        code: error.code,
+      });
     }
 
     if (this.isNetworkError(error)) {
@@ -792,7 +779,7 @@ class APIClient {
     } catch {
       return {
         initialized: true,
-        note: 'Config contains non-serializable values'
+        note: 'Config contains non-serializable values',
       };
     }
   }

@@ -30,7 +30,7 @@ class ConsoleFormatter {
 
     for (const [key, value] of Object.entries(content)) {
       // Guard: Handle null/undefined values
-      const displayValue = (value === null || value === undefined) ? 'N/A' : value;
+      const displayValue = value === null || value === undefined ? 'N/A' : value;
       console.log(`${key}: ${displayValue}`);
     }
 
@@ -46,7 +46,7 @@ class ConsoleFormatter {
     // Guard: Validate stats object
     if (!stats || typeof stats !== 'object') {
       return {
-        error: 'Invalid statistics data'
+        error: 'Invalid statistics data',
       };
     }
 
@@ -55,7 +55,7 @@ class ConsoleFormatter {
       'Cache hits': stats.hits ?? 0,
       'Cache misses': stats.misses ?? 0,
       'Hit rate': stats.hitRate ?? '0%',
-      'Elapsed time': stats.elapsedSeconds ? `${stats.elapsedSeconds}s` : '0s'
+      'Elapsed time': stats.elapsedSeconds ? `${stats.elapsedSeconds}s` : '0s',
     };
   }
 
@@ -69,17 +69,17 @@ class ConsoleFormatter {
     // Guard: Validate results object
     if (!results || typeof results !== 'object') {
       return {
-        error: 'Invalid results data'
+        error: 'Invalid results data',
       };
     }
 
     return {
       'Total URLs': totalUrls ?? 0,
-      'Processed': results.processed ?? 0,
+      Processed: results.processed ?? 0,
       'From cache': results.cached ?? 0,
       'Fetched new': results.fetched ?? 0,
       'Links created': results.linked ?? 0,
-      'Failed': results.failed ?? 0
+      Failed: results.failed ?? 0,
     };
   }
 }

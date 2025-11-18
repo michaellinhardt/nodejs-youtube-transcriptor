@@ -81,7 +81,7 @@ class ErrorHandler {
       ERROR_TYPES.SERVER_ERROR,
       ERROR_TYPES.TIMEOUT,
       ERROR_TYPES.NETWORK,
-      ERROR_TYPES.VALIDATION
+      ERROR_TYPES.VALIDATION,
     ].includes(error.type);
   }
 }

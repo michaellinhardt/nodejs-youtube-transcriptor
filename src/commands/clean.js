@@ -123,7 +123,9 @@ async function cleanCommand(dateString) {
       console.log(`No transcripts older than ${dateString}. Nothing to clean.`);
       console.log(`Total transcripts: ${Object.keys(registry).length}`);
       if (corruptedCount > 0) {
-        console.warn(`Warning: ${corruptedCount} corrupted entries skipped (run data command for details)`);
+        console.warn(
+          `Warning: ${corruptedCount} corrupted entries skipped (run data command for details)`
+        );
       }
       return;
     }
@@ -143,7 +145,7 @@ async function cleanCommand(dateString) {
       success: 0,
       errors: [],
       linksRemoved: 0,
-      linksSkipped: 0
+      linksSkipped: 0,
     };
 
     // Process each transcript atomically with progress reporting
@@ -162,7 +164,7 @@ async function cleanCommand(dateString) {
 
         if (linkResults.errors && linkResults.errors.length > 0) {
           console.warn(`  Warning: Some links could not be removed for ${videoId}`);
-          linkResults.errors.forEach(err => {
+          linkResults.errors.forEach((err) => {
             console.warn(`    ${err.path}: ${err.error}`);
           });
         }
@@ -187,14 +189,13 @@ async function cleanCommand(dateString) {
 
         results.success++;
         console.log(`  ✓ Deleted successfully`);
-
       } catch (error) {
         // Fail-safe: Log error and continue (FR-10.1)
         console.error(`  ✗ Error deleting ${videoId}: ${error.message}`);
         results.errors.push({
           videoId,
           error: error.message,
-          date_added: entry.date_added
+          date_added: entry.date_added,
         });
       }
     }
@@ -210,7 +211,7 @@ async function cleanCommand(dateString) {
     // Show errors if any
     if (results.errors.length > 0) {
       console.log('\nErrors encountered:');
-      results.errors.forEach(err => {
+      results.errors.forEach((err) => {
         console.log(`  ${err.videoId} (${err.date_added}): ${err.error}`);
       });
       console.log('\nTranscripts with errors remain in the registry.');
@@ -232,7 +233,6 @@ async function cleanCommand(dateString) {
     if (results.errors.length > 0) {
       process.exit(1);
     }
-
   } catch (error) {
     // Catch-all for unexpected errors
     console.error('\nUnexpected error during cleanup:', error.message);

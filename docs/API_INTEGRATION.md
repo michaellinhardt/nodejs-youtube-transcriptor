@@ -1,0 +1,701 @@
+# API Integration Guide
+
+## Overview
+
+The Transcriptor tool integrates with the **Scrape Creators API** to fetch YouTube video transcripts. This integration is a critical external dependency that enables the core functionality of converting YouTube URLs into locally-stored transcript files.
+
+The Scrape Creators service provides a simple HTTP endpoint that accepts YouTube URLs and returns plain text transcripts. The API has specific characteristics that impact integration design:
+
+- **Rate Limit**: 100 requests per minute
+- **Timeout**: 30-second maximum request duration
+- **Response Size**: 10MB maximum transcript size
+- **Authentication**: API key via HTTP header
+
+This document provides comprehensive details on the API contract, authentication requirements, error handling strategies, retry logic, and practical integration patterns implemented in the codebase.
+
+## Authentication & Setup
+
+### Environment Variable Configuration
+
+The API requires authentication through an API key that must be configured in the environment before running the application. The key is stored in a `.env` file and loaded at application startup.
+
+**Required Environment Variable:**
+```bash
+SCRAPE_CREATORS_API_KEY=your_api_key_here
+```
+
+**Setup Steps:**
+
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` and add your API key:
+   ```bash
+   # .env file
+   SCRAPE_CREATORS_API_KEY=sk_live_abc123xyz789...
+   ```
+
+3. Verify the configuration:
+   ```bash
+   transcriptor help
+   ```
+
+### Validation on Startup
+
+The application validates the API key presence during initialization (see `src/utils/envLoader.js`). If the `SCRAPE_CREATORS_API_KEY` environment variable is missing or empty, the application exits with a clear error message:
+
+```
+Error: SCRAPE_CREATORS_API_KEY environment variable is required
+Please add your API key to the .env file
+```
+
+This fail-fast approach prevents execution with invalid credentials and provides immediate feedback to users.
+
+**Security Note**: The API key is never logged, displayed in console output, or included in error messages. All logging related to API calls sanitizes credentials to prevent accidental exposure.
+
+## API Contract
+
+### Endpoint Specification
+
+**Base URL**: `https://api.scrape-creators.com`
+**Endpoint**: `/transcript`
+**Method**: `POST`
+**Content-Type**: `application/json`
+**Timeout**: 30 seconds
+
+### Request Schema
+
+The API accepts a JSON payload with a single required field:
+
+```json
+{
+  "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+}
+```
+
+**Field Descriptions:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | Yes | Full YouTube video URL (supports youtube.com/watch?v= and youtu.be/ formats) |
+
+**Required Headers:**
+
+| Header | Value | Description |
+|--------|-------|-------------|
+| `x-api-key` | `{SCRAPE_CREATORS_API_KEY}` | Authentication credential from environment |
+| `Content-Type` | `application/json` | Request body format |
+
+### Response Schema
+
+Successful responses return JSON with the transcript content:
+
+```json
+{
+  "transcript_only_text": "This is the full transcript text without timestamps or speaker labels. The content is provided as plain text ready for storage or further processing."
+}
+```
+
+**Field Descriptions:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `transcript_only_text` | string | Plain text transcript without timestamps, speaker labels, or formatting. Ready for direct storage. |
+
+**Response Characteristics:**
+- Maximum size: 10MB per transcript
+- Encoding: UTF-8
+- Format: Plain text (no markdown, HTML, or structured format)
+- Line breaks: Preserved from original transcript
+
+### Sample Request with Axios
+
+The application uses axios for HTTP communication. Here's a simplified example:
+
+```javascript
+const axios = require('axios');
+
+async function fetchTranscript(videoUrl, apiKey) {
+  const response = await axios.post(
+    'https://api.scrape-creators.com/transcript',
+    { url: videoUrl },
+    {
+      headers: {
+        'x-api-key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      timeout: 30000 // 30 seconds
+    }
+  );
+
+  return response.data.transcript_only_text;
+}
+```
+
+### Sample Request with cURL
+
+For testing or debugging purposes:
+
+```bash
+curl -X POST https://api.scrape-creators.com/transcript \
+  -H "x-api-key: sk_live_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}' \
+  --max-time 30
+```
+
+## Error Handling Reference
+
+The API integration implements comprehensive error handling per Technical Requirement TR-12. Different HTTP status codes trigger different behaviors to ensure robust operation.
+
+### Error Code Matrix
+
+| HTTP Status | Error Type | Behavior | Rationale |
+|-------------|------------|----------|-----------|
+| 400 Bad Request | `INVALID_REQUEST` | Skip URL, log error, continue processing | URL is invalid or video unavailable. No retry will succeed. |
+| 401 Unauthorized | `UNAUTHORIZED` | Exit process, display API key error | Invalid credentials. User must fix configuration before retry. |
+| 429 Too Many Requests | `RATE_LIMITED` | Exponential backoff retry (1s, 2s, 4s), max 3 attempts | Temporary rate limit. Retry with increasing delays. |
+| 500 Server Error | `SERVER_ERROR` | Skip URL, log error, continue processing | API server issue. Retry unlikely to succeed immediately. |
+| 502/503 Service Unavailable | `SERVER_ERROR` | Skip URL, log error, continue processing | API infrastructure issue. Skip and process remaining URLs. |
+| Network timeout | `TIMEOUT` | Skip URL, log error, continue processing | Request exceeded 30-second limit. Video may be too long or API slow. |
+| Connection refused | `NETWORK` | Skip URL, log error, continue processing | Network connectivity issue. Continue with other URLs. |
+
+### Error Handling Flow
+
+When an error occurs during API communication, the system follows this decision tree:
+
+```
+Error Detected
+    │
+    ├─→ 401 Unauthorized? → Exit process with clear message
+    │                        "Invalid API key. Check SCRAPE_CREATORS_API_KEY"
+    │
+    ├─→ 429 Rate Limited? → Check retry count
+    │                       ├─→ < 3 attempts → Exponential backoff, retry
+    │                       └─→ ≥ 3 attempts → Skip URL, continue
+    │
+    └─→ Other (400, 500, timeout, network)
+                            → Log error details
+                            → Skip URL
+                            → Continue with next URL
+```
+
+### Error Transformation
+
+The `APIClient` service transforms HTTP errors into application-specific error types with sanitized messages. This prevents sensitive data leakage while providing useful debugging information.
+
+**Implementation Reference**: `src/services/APIClient.js` - `transformError()` method
+
+**Error Transformation Examples:**
+
+```javascript
+// 401 Unauthorized
+{
+  type: 'UNAUTHORIZED',
+  message: 'API authentication failed. Check SCRAPE_CREATORS_API_KEY',
+  skipUrl: false,  // Caller should exit
+  retryable: false
+}
+
+// 429 Rate Limited
+{
+  type: 'RATE_LIMITED',
+  message: 'Rate limit exceeded (429). Retrying after delay...',
+  skipUrl: false,
+  retryable: true,
+  retryAfter: 2000  // milliseconds
+}
+
+// 500 Server Error
+{
+  type: 'SERVER_ERROR',
+  message: 'API server error (500). Skipping URL.',
+  skipUrl: true,
+  retryable: false
+}
+```
+
+### Log Message Examples
+
+The application provides detailed logging for troubleshooting:
+
+```
+[APIClient] Fetching transcript for video: dQw4w9WgXcQ
+[APIClient] Request completed in 1234ms (response size: 45.2KB)
+
+# Error scenarios:
+[APIClient] Error: Invalid YouTube URL (400) - Skipping
+[APIClient] Error: Rate limit exceeded (429) - Retry attempt 1 of 3 after 1000ms
+[APIClient] Error: API authentication failed (401) - Check SCRAPE_CREATORS_API_KEY
+[APIClient] Error: Request timeout after 30000ms - Skipping URL
+```
+
+## Retry Strategy
+
+### When to Retry
+
+The application implements selective retry logic based on error type. Only **429 Too Many Requests** errors trigger retry attempts, as these represent temporary rate limiting that can be resolved by waiting.
+
+Other error types (400, 401, 500, timeout, network) do not trigger retries because:
+- **400**: Request is malformed or video unavailable (retry won't fix)
+- **401**: Credentials invalid (requires configuration fix)
+- **500**: Server error (retry unlikely to succeed immediately)
+- **Timeout**: Request too slow (immediate retry will likely timeout again)
+- **Network**: Connectivity issue (retry won't fix underlying problem)
+
+### Exponential Backoff Algorithm
+
+When a 429 error occurs, the system waits before retrying with exponentially increasing delays:
+
+| Attempt | Base Delay | Jitter Range | Actual Delay |
+|---------|------------|--------------|--------------|
+| 1 (initial) | 0ms | - | 0ms |
+| 2 (retry 1) | 1000ms | ±250ms | 750-1250ms |
+| 3 (retry 2) | 2000ms | ±500ms | 1500-2500ms |
+| 4 (retry 3) | 4000ms | ±1000ms | 3000-5000ms |
+
+**Jitter**: Random variation (±25%) prevents thundering herd problem when multiple clients retry simultaneously.
+
+**Maximum Attempts**: 3 total attempts (1 initial + 2 retries). After 3 failures, the URL is skipped.
+
+### Delay Calculation Formula
+
+```javascript
+function calculateDelay(attemptNumber) {
+  const baseDelay = Math.pow(2, attemptNumber - 1) * 1000; // 1s, 2s, 4s
+  const jitter = baseDelay * 0.25; // ±25%
+  const randomJitter = (Math.random() * 2 - 1) * jitter; // -jitter to +jitter
+  return Math.max(0, baseDelay + randomJitter);
+}
+```
+
+### Retry-After Header Support
+
+The API may return a `Retry-After` header in 429 responses, specifying the recommended wait time. The client respects this header when present:
+
+```javascript
+// Response headers from API
+{
+  'retry-after': '5' // Wait 5 seconds
+}
+
+// Client uses this value instead of exponential backoff
+const delayMs = parseInt(retryAfterHeader) * 1000;
+```
+
+**Security Bounds**: The `Retry-After` value is capped at 60 seconds to prevent denial-of-service attacks via malicious header values.
+
+### Code Example
+
+**Implementation Reference**: `src/services/APIClient.js` - `fetchWithRetry()` method
+
+Simplified retry logic:
+
+```javascript
+async function fetchWithRetry(videoUrl, maxAttempts = 3) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await axios.post(API_URL, { url: videoUrl }, config);
+      return response.data.transcript_only_text;
+
+    } catch (error) {
+      lastError = error;
+
+      // Only retry on 429 errors
+      if (error.response?.status === 429 && attempt < maxAttempts) {
+        const delay = calculateDelay(attempt);
+        console.log(`Rate limited. Retrying in ${delay}ms (attempt ${attempt})`);
+        await sleep(delay);
+        continue;
+      }
+
+      // For other errors or max retries reached, throw immediately
+      throw error;
+    }
+  }
+
+  throw lastError;
+}
+```
+
+## Integration Points in Codebase
+
+### APIClient Class Architecture
+
+The `APIClient` class (`src/services/APIClient.js`) is the primary integration point with the Scrape Creators API. It handles:
+
+- HTTP client configuration with axios
+- API key injection via request interceptors
+- Request/response logging
+- Error transformation and classification
+- Retry logic with exponential backoff
+- Response validation
+
+**Class Structure:**
+
+```javascript
+class APIClient {
+  constructor(apiKey) {
+    this.apiKey = apiKey;
+    this.client = null; // Axios instance
+    this.requestDeduplication = new Map(); // Prevent duplicate concurrent requests
+    this.retryBudget = new Map(); // Track retry attempts per video
+  }
+
+  async initialize() { /* Setup axios instance */ }
+
+  async fetchTranscript(videoUrl) { /* Main public method */ }
+
+  // Private helper methods:
+  async _fetchWithRetry(videoUrl, attempt = 1) { /* Retry logic */ }
+  _transformError(error) { /* Error classification */ }
+  _validateResponse(response) { /* Response validation */ }
+  _sanitizeConfig(config) { /* Remove sensitive data from logs */ }
+}
+```
+
+### fetchTranscript Method Walkthrough
+
+The `fetchTranscript()` method is the public API for retrieving transcripts:
+
+**Method Signature:**
+```javascript
+/**
+ * Fetch transcript for YouTube video
+ * @param {string} videoUrl - Full YouTube URL
+ * @returns {Promise<string>} Plain text transcript
+ * @throws {Error} On authentication failure (401)
+ */
+async fetchTranscript(videoUrl)
+```
+
+**Execution Flow:**
+
+1. **Input Validation**: Validate YouTube URL format
+2. **Deduplication Check**: Prevent duplicate concurrent requests for same video
+3. **Retry Loop**: Execute request with retry logic (max 3 attempts)
+4. **Request Execution**: POST to API with authentication header
+5. **Response Validation**: Check for `transcript_only_text` field and size limits
+6. **Error Handling**: Transform errors to application error types
+7. **Return**: Plain text transcript content
+
+### Request/Response Interceptors
+
+Axios interceptors handle cross-cutting concerns:
+
+**Request Interceptor** (src/services/APIClient.js):
+- Adds `x-api-key` header to all requests
+- Logs sanitized request details (URL without API key)
+- Validates request configuration
+
+**Response Interceptor**:
+- Logs response size and duration
+- Validates response structure
+- Enforces 10MB size limit per TR specifications
+
+**Error Interceptor**:
+- Catches HTTP errors and network failures
+- Transforms to application error types
+- Sanitizes error messages (removes API key, sensitive data)
+
+### Integration with TranscriptService
+
+The `TranscriptService` class (`src/services/TranscriptService.js`) orchestrates the workflow, using `APIClient` as a dependency:
+
+```javascript
+class TranscriptService {
+  constructor(storageService, apiClient, pathResolver) {
+    this.storage = storageService;
+    this.api = apiClient; // APIClient dependency
+    this.linkManager = new LinkManager(storageService, pathResolver);
+  }
+
+  async processVideo(videoId, url) {
+    // 1. Check cache first (cache-first strategy)
+    const isCached = await this._checkCache(videoId);
+    if (isCached) {
+      return this.storage.loadTranscript(videoId); // Skip API call
+    }
+
+    // 2. Cache miss - fetch from API
+    const transcript = await this.api.fetchTranscript(url);
+
+    // 3. Save immediately (crash resilience)
+    await this.storage.saveTranscript(videoId, transcript);
+
+    // 4. Create symbolic link
+    await this.linkManager.createLink(videoId);
+
+    return transcript;
+  }
+}
+```
+
+## Testing Integration
+
+### Testing Scenarios
+
+Manual testing should cover these scenarios to validate API integration:
+
+**Happy Path:**
+1. Valid API key, valid YouTube URL → Transcript retrieved successfully
+2. Verify `transcript_only_text` field extracted correctly
+3. Check transcript saved to storage
+
+**Error Scenarios:**
+1. **Invalid API Key (401)**:
+   - Remove API key from .env
+   - Run `transcriptor`
+   - Expect: Process exits with clear error message
+
+2. **Invalid URL (400)**:
+   - Add invalid YouTube URL to youtube.md
+   - Run `transcriptor`
+   - Expect: URL skipped, processing continues
+
+3. **Rate Limit (429)**:
+   - Trigger rate limit by processing 100+ videos quickly
+   - Expect: Automatic retry with exponential backoff
+   - Verify: Maximum 3 attempts, then skip
+
+4. **Network Timeout**:
+   - Set timeout to 1ms in APIClientConstants.js (temporary test)
+   - Run `transcriptor`
+   - Expect: Timeout error logged, URL skipped
+
+5. **Server Error (500)**:
+   - Mock server error (requires API testing tool)
+   - Expect: URL skipped, processing continues
+
+### Mock API Responses
+
+For development and testing, you can use a mock server to simulate API behavior:
+
+```javascript
+// Example using nock for testing
+const nock = require('nock');
+
+// Mock successful response
+nock('https://api.scrape-creators.com')
+  .post('/transcript')
+  .reply(200, {
+    transcript_only_text: 'This is a test transcript.'
+  });
+
+// Mock rate limit with retry
+nock('https://api.scrape-creators.com')
+  .post('/transcript')
+  .reply(429, { error: 'Rate limit exceeded' }, {
+    'Retry-After': '2'
+  });
+
+// Mock authentication error
+nock('https://api.scrape-creators.com')
+  .post('/transcript')
+  .reply(401, { error: 'Invalid API key' });
+```
+
+### Simulating Error Conditions
+
+**API Key Validation:**
+```bash
+# Test missing API key
+unset SCRAPE_CREATORS_API_KEY
+transcriptor
+# Expected: "Error: SCRAPE_CREATORS_API_KEY environment variable is required"
+```
+
+**Rate Limit Testing:**
+- Process a batch of 100+ videos to trigger rate limiting
+- Observe retry behavior in logs
+- Verify exponential backoff delays (1s, 2s, 4s)
+
+**Timeout Simulation:**
+- Use a video known to have very long transcripts
+- Monitor request duration in logs
+- Verify 30-second timeout enforcement
+
+## Troubleshooting Guide
+
+### Common Issues and Solutions
+
+#### Issue 1: "API authentication failed (401)"
+
+**Symptoms:**
+- Application exits immediately with 401 error
+- Message: "API authentication failed. Check SCRAPE_CREATORS_API_KEY"
+
+**Solutions:**
+1. Verify `.env` file exists in project root
+2. Check `SCRAPE_CREATORS_API_KEY` is set and not empty
+3. Ensure no extra spaces around API key value
+4. Verify API key is valid (not expired or revoked)
+5. Check `.env` is loaded (not in .gitignore'd location)
+
+#### Issue 2: "Rate limit exceeded (429)" on every request
+
+**Symptoms:**
+- Every API call returns 429 immediately
+- Retries exhaust quickly
+
+**Solutions:**
+1. Check if rate limit was exceeded recently (100/min limit)
+2. Wait 60 seconds for rate limit window to reset
+3. Reduce batch size to stay under 100 videos per minute
+4. Verify no other instances of tool running concurrently
+
+#### Issue 3: "Request timeout after 30000ms"
+
+**Symptoms:**
+- Requests consistently timeout at 30 seconds
+- Specific videos always timeout
+
+**Solutions:**
+1. Check internet connection speed
+2. Verify video is accessible (not geo-blocked or private)
+3. Video may have extremely long transcript (>10MB)
+4. Try same video ID directly via cURL to isolate issue
+5. Check Scrape Creators API status page
+
+#### Issue 4: All requests fail with "Invalid YouTube URL (400)"
+
+**Symptoms:**
+- Valid URLs consistently return 400 errors
+- API rejects URL format
+
+**Solutions:**
+1. Verify URL format in youtube.md (one URL per line)
+2. Check for extra characters or whitespace
+3. Ensure URL is complete (includes https://)
+4. Verify video ID extraction regex is working
+5. Test URL directly with cURL to verify API accepts it
+
+### Debug Logging
+
+Enable detailed logging by modifying `src/constants/APIClientConstants.js`:
+
+```javascript
+// Temporarily enable debug mode
+const API_CLIENT_CONFIG = {
+  // ... existing config
+  validateStatus: (status) => status < 500, // Accept all client errors
+  debug: true // Enable detailed axios logging
+};
+```
+
+This will output full request/response details for troubleshooting.
+
+### API Key Validation
+
+Verify your API key is correctly loaded:
+
+```javascript
+// src/utils/envLoader.js
+function loadEnv() {
+  require('dotenv').config();
+
+  const apiKey = process.env.SCRAPE_CREATORS_API_KEY;
+
+  if (!apiKey || apiKey.trim().length === 0) {
+    console.error('Error: SCRAPE_CREATORS_API_KEY environment variable is required');
+    console.error('Please add your API key to the .env file');
+    process.exit(1);
+  }
+
+  // Debug: Show first/last 4 chars (never log full key)
+  console.log(`API Key loaded: ${apiKey.slice(0, 4)}...${apiKey.slice(-4)}`);
+
+  return { apiKey };
+}
+```
+
+## Configuration Constants
+
+Key configuration values from `src/constants/APIClientConstants.js`:
+
+```javascript
+const API_CLIENT_CONFIG = {
+  BASE_URL: 'https://api.scrape-creators.com',
+  TIMEOUT: 30000,                    // 30 seconds
+  MAX_RETRIES: 3,                    // Maximum retry attempts
+  RETRY_DELAYS: [1000, 2000, 4000],  // Exponential backoff (ms)
+  MAX_RETRY_AFTER: 60000,            // Maximum Retry-After value (60s)
+  MAX_TRANSCRIPT_SIZE: 10485760      // 10MB in bytes
+};
+
+const ERROR_TYPES = {
+  INVALID_REQUEST: 'INVALID_REQUEST',     // 400
+  UNAUTHORIZED: 'UNAUTHORIZED',           // 401
+  RATE_LIMITED: 'RATE_LIMITED',           // 429
+  SERVER_ERROR: 'SERVER_ERROR',           // 500, 502, 503
+  TIMEOUT: 'TIMEOUT',                     // ETIMEDOUT
+  NETWORK: 'NETWORK'                      // ECONNREFUSED, etc.
+};
+```
+
+## Rate Limiting Strategy
+
+The API enforces a **100 requests per minute** rate limit. The integration handles this through:
+
+1. **Exponential Backoff**: Automatic retry with increasing delays on 429 errors
+2. **Retry Budget**: Tracks retry attempts per video to prevent infinite loops
+3. **Request Deduplication**: Prevents duplicate concurrent requests for same video
+4. **Sequential Processing**: Processes URLs one at a time (not concurrent)
+
+**Best Practices:**
+- Process videos in batches of <100 per minute
+- Allow retry logic to handle rate limits automatically
+- Monitor logs for frequent 429 errors (may indicate need to slow down)
+- Use cache-first strategy to minimize API calls
+
+## Security Considerations
+
+### API Key Protection
+
+- **Never log**: API key is never written to console or log files
+- **Environment only**: Key stored in .env file, not hardcoded
+- **Sanitized errors**: Error messages never include API key
+- **Request logging**: Sanitizes request config before logging
+
+### HTTPS Enforcement
+
+All API communication uses HTTPS to prevent man-in-the-middle attacks. The axios client enforces HTTPS URLs.
+
+### Response Data Sanitization
+
+Error contexts sanitize response data to prevent logging sensitive information:
+
+```javascript
+function sanitizeResponseData(data) {
+  if (typeof data === 'object') {
+    return '[Object]'; // Don't log full response objects in errors
+  }
+  return String(data).slice(0, 100); // Truncate long strings
+}
+```
+
+### Retry-After Validation
+
+The `Retry-After` header value is validated to prevent DoS attacks:
+
+```javascript
+const retryAfter = parseInt(header);
+if (isNaN(retryAfter) || retryAfter < 0 || retryAfter > 60) {
+  // Ignore malicious values, use default backoff
+  return calculateExponentialDelay(attempt);
+}
+```
+
+## References
+
+- **Implementation**: `src/services/APIClient.js`
+- **Constants**: `src/constants/APIClientConstants.js`
+- **Error Handling**: `src/utils/ErrorHandler.js`
+- **URL Validation**: `src/utils/URLValidator.js`
+- **Functional Requirements**: FR-2.1 (Transcript Acquisition)
+- **Technical Requirements**: TR-11 (API Key Management), TR-12 (API Failures)
+- **Scrape Creators API Documentation**: Contact vendor for official docs

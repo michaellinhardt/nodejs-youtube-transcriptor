@@ -38,7 +38,7 @@ async function calculateStatistics(registry, storagePath) {
     total,
     size,
     oldest,
-    newest
+    newest,
   };
 }
 
@@ -50,7 +50,7 @@ function getZeroStatistics() {
     total: 0,
     size: 0,
     oldest: null,
-    newest: null
+    newest: null,
   };
 }
 
@@ -74,14 +74,14 @@ function getDateRange(registry) {
   }
 
   const dates = Object.values(registry)
-    .filter(entry => entry && typeof entry === 'object') // Filter null entries (BUG FIX)
-    .map(entry => entry.date_added)
-    .filter(date => date && typeof date === 'string' && date.trim() !== '') // Reject empty strings (BUG FIX)
+    .filter((entry) => entry && typeof entry === 'object') // Filter null entries (BUG FIX)
+    .map((entry) => entry.date_added)
+    .filter((date) => date && typeof date === 'string' && date.trim() !== '') // Reject empty strings (BUG FIX)
     .sort(); // Lexicographic sort works for YYYY-MM-DD
 
   return {
     oldest: dates.length > 0 ? dates[0] : null,
-    newest: dates.length > 0 ? dates[dates.length - 1] : null
+    newest: dates.length > 0 ? dates[dates.length - 1] : null,
   };
 }
 
@@ -100,7 +100,9 @@ async function getFolderSize(folderPath) {
 
   // Guard: Folder doesn't exist
   const exists = await fs.pathExists(folderPath);
-  if (!exists) return 0;
+  if (!exists) {
+    return 0;
+  }
 
   let totalSize = 0;
 
@@ -109,7 +111,9 @@ async function getFolderSize(folderPath) {
 
     for (const item of items) {
       // Guard: Skip null/undefined items (BUG FIX)
-      if (!item || !item.name) continue;
+      if (!item || !item.name) {
+        continue;
+      }
 
       const itemPath = path.join(folderPath, item.name);
 
@@ -127,17 +131,14 @@ async function getFolderSize(folderPath) {
       } catch (itemError) {
         // Skip inaccessible items (permission denied, etc.)
         // Sanitize path in production to avoid info leakage (SECURITY)
-        const displayPath = process.env.NODE_ENV === 'production'
-          ? path.basename(itemPath)
-          : itemPath;
+        const displayPath =
+          process.env.NODE_ENV === 'production' ? path.basename(itemPath) : itemPath;
         console.warn(`Skipping inaccessible item: ${displayPath}`);
       }
     }
   } catch (error) {
     // Sanitize path in production (SECURITY)
-    const displayPath = process.env.NODE_ENV === 'production'
-      ? 'storage directory'
-      : folderPath;
+    const displayPath = process.env.NODE_ENV === 'production' ? 'storage directory' : folderPath;
     console.warn(`Cannot read directory ${displayPath}: ${error.message}`);
   }
 
@@ -156,14 +157,22 @@ function formatSize(bytes) {
     return '0 B';
   }
 
-  if (bytes === 0) return '0 B';
-  if (bytes < 1024) return `${bytes} B`;
+  if (bytes === 0) {
+    return '0 B';
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
 
   const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(2)} KB`;
+  if (kb < 1024) {
+    return `${kb.toFixed(2)} KB`;
+  }
 
   const mb = kb / 1024;
-  if (mb < 1024) return `${mb.toFixed(2)} MB`;
+  if (mb < 1024) {
+    return `${mb.toFixed(2)} MB`;
+  }
 
   const gb = mb / 1024;
   return `${gb.toFixed(2)} GB`;
@@ -171,5 +180,5 @@ function formatSize(bytes) {
 
 module.exports = {
   calculateStatistics,
-  formatSize
+  formatSize,
 };

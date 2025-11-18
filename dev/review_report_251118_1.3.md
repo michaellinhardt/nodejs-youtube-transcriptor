@@ -12,18 +12,22 @@ Plan demonstrates strong architectural foundation with clear separation of conce
 ## Strengths Identified
 
 ### Architecture Design
+
 - **What's Good:** Three-tier architecture (presentation/business/infrastructure) aligns perfectly with clean architecture principles and TR-1 specifications
 - **Impact:** Enables maintainable codebase with clear dependency flow and independent layer evolution
 
 ### Module Boundaries
+
 - **What's Good:** Clear separation between command orchestration (thin handlers) and service execution (business logic)
 - **Impact:** Promotes single responsibility principle and facilitates future testing despite no-test policy
 
 ### Dependency Management
+
 - **What's Good:** Constructor dependency injection pattern specified for service classes enables loose coupling
 - **Impact:** Services remain testable and mockable if testing requirements change in future
 
 ### Cross-Platform Consideration
+
 - **What's Good:** Explicit use of Node.js path/os modules for path resolution avoiding hardcoded separators
 - **Impact:** Ensures Windows/Mac/Linux compatibility from foundation
 
@@ -32,6 +36,7 @@ Plan demonstrates strong architectural foundation with clear separation of conce
 ### Critical Issues (Must Fix)
 
 #### Issue 1: Bin Entry Point Misconfiguration
+
 - **Severity:** High
 - **Location:** Step 4 Implementation, package.json reference
 - **Problem:** Plan references index.js as CLI entry point but package.json bin configuration points to "./src/index.js" instead of dedicated bin/transcriptor file per TR-18. Current src/index.js has shebang but plan creates confusion about entry point location.
@@ -51,6 +56,7 @@ const { program } = require('commander');
 ```
 
 #### Issue 2: Missing Module Export Validation Strategy
+
 - **Severity:** High
 - **Location:** Step 5 Success Criteria
 - **Problem:** Plan states "Module exports must be defined even if placeholder" but provides no mechanism to validate exports exist or are callable. Placeholder files could have syntax errors or missing exports causing runtime failures.
@@ -69,7 +75,7 @@ const modules = [
   { path: './services/APIClient', type: 'class' },
   { path: './utils/pathResolver', type: 'object' },
   { path: './utils/envLoader', type: 'object' },
-  { path: './utils/validators', type: 'object' }
+  { path: './utils/validators', type: 'object' },
 ];
 
 modules.forEach(({ path, type }) => {
@@ -87,6 +93,7 @@ modules.forEach(({ path, type }) => {
 ```
 
 #### Issue 3: Environment Loading Failure Mode Undefined
+
 - **Severity:** High
 - **Location:** Step 4.C Implementation Guidelines
 - **Problem:** Plan shows envLoader.load() called at startup but does not specify behavior when .env file missing vs API key missing. Code exits with process.exit(1) on missing key but unclear if dotenv.config() failure is handled.
@@ -118,18 +125,19 @@ module.exports = {
 
   validate() {
     const requiredKeys = ['SCRAPE_CREATORS_API_KEY'];
-    const missing = requiredKeys.filter(key => !process.env[key]);
+    const missing = requiredKeys.filter((key) => !process.env[key]);
 
     if (missing.length > 0) {
       console.error(`Error: Missing required environment variables: ${missing.join(', ')}`);
       console.error('Please configure these in your .env file');
       process.exit(1);
     }
-  }
+  },
 };
 ```
 
 #### Issue 4: Circular Dependency Risk Unmitigated
+
 - **Severity:** High
 - **Location:** Risk Mitigation table, Step 2.C
 - **Problem:** Plan identifies circular dependency risk as "Medium" likelihood but provides only high-level mitigation "Enforce unidirectional dependency flow". No concrete enforcement mechanism specified. TranscriptService depends on StorageService and APIClient, but nothing prevents services from cross-importing.
@@ -142,16 +150,16 @@ const fs = require('fs');
 const path = require('path');
 
 const rules = {
-  'commands': { canImport: ['services', 'utils'] },
-  'services': { canImport: ['utils'], mustInject: ['services'] },
-  'utils': { canImport: [] }
+  commands: { canImport: ['services', 'utils'] },
+  services: { canImport: ['utils'], mustInject: ['services'] },
+  utils: { canImport: [] },
 };
 
 function validateImports(layer, filePath) {
   const content = fs.readFileSync(filePath, 'utf8');
   const requires = content.match(/require\(['"]\.\.?\/(.*?)['"]\)/g) || [];
 
-  requires.forEach(req => {
+  requires.forEach((req) => {
     const importedLayer = req.match(/\/(commands|services|utils)\//)?.[1];
     if (importedLayer && !rules[layer].canImport.includes(importedLayer)) {
       throw new Error(`${layer} cannot import ${importedLayer}: ${req} in ${filePath}`);
@@ -163,6 +171,7 @@ function validateImports(layer, filePath) {
 ### Moderate Issues (Should Fix)
 
 #### Issue 5: Placeholder Content Specifications Missing
+
 - **Severity:** Medium
 - **Location:** Steps 1, 2, 3 Success Criteria
 - **Problem:** Plan requires placeholder files but does not specify what placeholder implementation should contain. "Exports properly structured function" is vague - should it throw NotImplementedError, return null, log placeholder message?
@@ -191,15 +200,26 @@ module.exports = TranscriptService;
 
 // utils/pathResolver.js
 module.exports = {
-  getHomePath() { return require('os').homedir(); },
-  getStoragePath() { throw new Error('Not implemented'); },
-  getTranscriptsPath() { throw new Error('Not implemented'); },
-  getRegistryPath() { throw new Error('Not implemented'); },
-  getLocalTranscriptsPath() { throw new Error('Not implemented'); }
+  getHomePath() {
+    return require('os').homedir();
+  },
+  getStoragePath() {
+    throw new Error('Not implemented');
+  },
+  getTranscriptsPath() {
+    throw new Error('Not implemented');
+  },
+  getRegistryPath() {
+    throw new Error('Not implemented');
+  },
+  getLocalTranscriptsPath() {
+    throw new Error('Not implemented');
+  },
 };
 ```
 
 #### Issue 6: Commander Parse Position Incorrect
+
 - **Severity:** Medium
 - **Location:** Step 4.C Implementation Guidelines, line 344
 - **Problem:** Code shows `program.parse(process.argv);` at end but does not handle case where no arguments provided. With default action defined, running `transcriptor` with no args should trigger default action, but parse() behavior with defaults can be ambiguous.
@@ -221,6 +241,7 @@ if (process.argv.length === 2) {
 ```
 
 #### Issue 7: PathResolver Method Interdependency Fragile
+
 - **Severity:** Medium
 - **Location:** Step 3.C Implementation Guidelines, pathResolver.js
 - **Problem:** PathResolver methods use `this.getHomePath()` but module exports plain object, not class instance. In Node.js module context, `this` may not bind correctly. Methods calling each other via `this` will fail.
@@ -252,17 +273,19 @@ module.exports = {
   },
   getLocalTranscriptsPath() {
     return path.resolve('./transcripts');
-  }
+  },
 };
 ```
 
 #### Issue 8: No ESLint/Prettier Configuration Content
+
 - **Severity:** Medium
 - **Location:** Task 1.4.3 referenced in plan
 - **Problem:** Plan mentions ESLint/Prettier configuration in task 1.4.3 but does not specify configuration content or standards. Coding Standards section provides patterns but no linter rules to enforce them.
 - **Recommendation:** While task 1.4.3 is not part of current implementation scope, plan should note that manual code review replaces linter checks for this task. Add checklist to Step 5 verifying coding standards manually.
 
 #### Issue 9: Lazy-Loading Strategy Incomplete
+
 - **Severity:** Medium
 - **Location:** Step 4.C Critical Points
 - **Problem:** Plan states "Lazy-require commands to reduce startup time" but shows requires inside action callbacks which is correct pattern. However, no measurement baseline specified to validate if lazy loading actually improves performance for small tool.
@@ -271,18 +294,21 @@ module.exports = {
 ### Minor Issues (Consider Fixing)
 
 #### Issue 10: Success Criteria Checkboxes Inconsistent
+
 - **Severity:** Low
 - **Location:** All steps (1-5)
 - **Problem:** Each step has success criteria with checkboxes but no indication of who checks them or when. Plan implementation vs validation phases blur together.
 - **Recommendation:** Clarify that checkboxes are for implementer to verify during execution. Add note that all boxes must be checked before considering step complete.
 
 #### Issue 11: Mermaid Diagram Value Questionable
+
 - **Severity:** Low
 - **Location:** Step 1.B, Step 2.B
 - **Problem:** Mermaid diagrams show basic relationships already described in text. For simple structures, diagrams add verbosity without clarity. Graph in Step 1.B shows four parallel command files with no interesting relationships.
 - **Recommendation:** Remove Step 1.B diagram (trivial). Keep Step 2.B diagram as it shows inter-service dependencies which are more complex. Alternatively enhance diagrams with dependency injection flows.
 
 #### Issue 12: Version Hardcoded in Router
+
 - **Severity:** Low
 - **Location:** Step 4.C Implementation Guidelines, line 308
 - **Problem:** Code shows `.version('1.0.0')` hardcoded but package.json already defines version. DRY principle violation causes version drift.
@@ -297,6 +323,7 @@ program
 ```
 
 #### Issue 13: File Creation Order Not Optimized
+
 - **Severity:** Low
 - **Location:** High-Level Steps sequence
 - **Problem:** Plan creates directories and files depth-first (all commands, then all services, then all utils) but commander router (Step 4) could be created earlier to test structure incrementally.
@@ -313,15 +340,19 @@ program
 ### Additional Considerations Needed
 
 #### Bootstrap Initialization Missing
+
 Plan creates directory structure for source code but does not address TR-19 requirement to initialize ~/.transcriptor storage on first execution. Step 3.1.3 mentions "Ensure ~/.transcriptor directory structure" but no implementation guidance provided. StorageService constructor or initialization method should create directories if missing.
 
 #### Testing Without API Key
+
 With environment validation failing on missing API key, developers cannot test directory structure without configuring actual API credentials. Plan should specify NODE_ENV=structure-test mode or mock environment for structure verification as mentioned in Issue 3 fix.
 
 #### Command Router Error Handling
+
 Plan shows command handlers are async but does not wrap commander actions in try-catch. Unhandled promise rejections from commands will crash CLI. Router should catch errors and display user-friendly messages instead of stack traces.
 
 #### File Permissions Validation
+
 Plan mentions "Directory permissions must allow read/write" in Step 5 Critical Points but provides no mechanism to validate permissions or handle EACCES errors during directory creation.
 
 ## Review Checklist Results
@@ -391,16 +422,16 @@ Plan mentions "Directory permissions must allow read/write" in Step 5 Critical P
 
 ## Risk Assessment
 
-| Risk | Likelihood | Impact | Mitigation Required |
-|------|------------|--------|-------------------|
-| npm link fails due to bin misconfiguration | High | High | P0-1: Create bin/transcriptor entry point |
-| Module imports fail at runtime | High | High | P0-2: Add export validation script |
-| Tool crashes with unclear errors on missing .env | High | Medium | P0-3: Enhanced environment validation |
-| Circular dependencies cause require failures | Medium | High | P0-4: Implement import rules validation |
-| PathResolver this binding fails | Medium | Medium | P1-2: Fix method interdependency |
-| Unhandled promise rejections crash CLI | Medium | Medium | P1-4: Add commander error handling |
-| First run fails due to missing ~/.transcriptor | Low | Medium | P1-3: Add storage initialization |
-| Version drift between package.json and code | Low | Low | P2-1: Dynamic version loading |
+| Risk                                             | Likelihood | Impact | Mitigation Required                       |
+| ------------------------------------------------ | ---------- | ------ | ----------------------------------------- |
+| npm link fails due to bin misconfiguration       | High       | High   | P0-1: Create bin/transcriptor entry point |
+| Module imports fail at runtime                   | High       | High   | P0-2: Add export validation script        |
+| Tool crashes with unclear errors on missing .env | High       | Medium | P0-3: Enhanced environment validation     |
+| Circular dependencies cause require failures     | Medium     | High   | P0-4: Implement import rules validation   |
+| PathResolver this binding fails                  | Medium     | Medium | P1-2: Fix method interdependency          |
+| Unhandled promise rejections crash CLI           | Medium     | Medium | P1-4: Add commander error handling        |
+| First run fails due to missing ~/.transcriptor   | Low        | Medium | P1-3: Add storage initialization          |
+| Version drift between package.json and code      | Low        | Low    | P2-1: Dynamic version loading             |
 
 ## Conclusion
 
@@ -409,7 +440,7 @@ Plan mentions "Directory permissions must allow read/write" in Step 5 Critical P
 **Decision:**
 
 - [ ] Proceed with implementation as-is
-- [X] Revise plan with recommended changes
+- [x] Revise plan with recommended changes
 - [ ] Major rework required
 
 **Critical Success Factors:**
@@ -421,6 +452,7 @@ Plan mentions "Directory permissions must allow read/write" in Step 5 Critical P
 5. Commander error handling must catch unhandled promise rejections from async command handlers
 
 **Implementation Blockers:**
+
 - P0-1 (bin structure) blocks npm link installation
 - P0-2 (export validation) blocks verification of structure integrity
 - P0-3 (environment errors) blocks developer experience during setup
