@@ -255,7 +255,7 @@ User's Machine
 
 ### Project Structure
 
-```
+```folders
 nodejs-youtube-transcriptor/
 ├── src/
 │   └── index.js          # Main entry point (CLI handler)
