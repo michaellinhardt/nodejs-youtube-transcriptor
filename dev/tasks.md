@@ -48,23 +48,34 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 2.3.3 Implement help text generation
   - [x] 2.3.4 Add version information display
 
-`## 3.0 Storage System Implementation
+## 3.0 Storage System Implementation
 <!-- Estimated: 16 hours total | Depends on: 2.1 -->
 - [x] 3.1 Storage service core [CRITICAL PATH] (implements FR-3)
   - [x] 3.1.1 Create StorageService class structure
   - [x] 3.1.2 Implement initialization operations (TR-19)
   - [x] 3.1.3 Ensure ~/.transcriptor directory structure
   - [x] 3.1.4 Initialize empty data.json if missing
-- [ ] 3.2 Registry operations (implements FR-3.2, TR-16)
-  - [ ] 3.2.1 Implement registry loading from data.json
-  - [ ] 3.2.2 Create registry update methods
-  - [ ] 3.2.3 Implement atomic write operations (TR-8)
-  - [ ] 3.2.4 Add registry validation logic
+- [x] 3.2 Registry operations (implements FR-3.2, TR-16) [REMEDIATED 2025-11-19] [REFACTORED 2025-11-19]
+  - [x] 3.2.1 Implement registry loading from data.json
+  - [x] 3.2.2 Create registry update methods (saveRegistry)
+  - [x] 3.2.3 Implement atomic write operations (TR-8)
+  - [x] 3.2.4 Add registry validation logic (isValidRegistryStructure)
+  - [x] 3.2.5 Fix double-initialization vulnerability
+  - [x] 3.2.6 Add null checks in error recovery paths
+  - [x] 3.2.7 Fix validation error propagation
+  - [x] 3.2.8 Handle race conditions in atomic write
+  - [x] 3.2.9 Add error handling in validation function
+  - [x] 3.2.10 Extract validation helpers from isValidRegistryStructure
+  - [x] 3.2.11 Apply guard clauses to loadRegistry and saveRegistry
+  - [x] 3.2.12 Introduce named constants for allowed keys and format specifications
+  - [x] 3.2.13 Refactor atomic write error handling into separate methods
+  - [x] 3.2.14 Improve error messages with contextual information
+  - [x] 3.2.15 Rename variables for clarity (exists to fileExists, data to registryData)
 - [ ] 3.3 File operations (implements TR-17)
   - [ ] 3.3.1 Implement transcript save functionality
   - [ ] 3.3.2 Create transcript read methods
   - [ ] 3.3.3 Add file existence checking
-  - [ ] 3.3.4 Implement file deletion with error handling`
+  - [ ] 3.3.4 Implement file deletion with error handling
 
 ## 4.0 API Integration Layer
 <!-- Estimated: 12 hours total | Depends on: 2.2 | High Risk -->
