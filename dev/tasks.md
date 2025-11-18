@@ -71,11 +71,11 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 3.2.13 Refactor atomic write error handling into separate methods
   - [x] 3.2.14 Improve error messages with contextual information
   - [x] 3.2.15 Rename variables for clarity (exists to fileExists, data to registryData)
-- [ ] 3.3 File operations (implements TR-17)
-  - [ ] 3.3.1 Implement transcript save functionality
-  - [ ] 3.3.2 Create transcript read methods
-  - [ ] 3.3.3 Add file existence checking
-  - [ ] 3.3.4 Implement file deletion with error handling
+- [x] 3.3 File operations (implements TR-17)
+  - [x] 3.3.1 Implement transcript save functionality
+  - [x] 3.3.2 Create transcript read methods
+  - [x] 3.3.3 Add file existence checking
+  - [x] 3.3.4 Implement file deletion with error handling
 
 ## 4.0 API Integration Layer
 <!-- Estimated: 12 hours total | Depends on: 2.2 | High Risk -->

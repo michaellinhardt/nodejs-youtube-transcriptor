@@ -17,6 +17,7 @@ class StorageService {
     encoding: 'utf8',
     EOL: '\n'
   };
+  static MAX_TRANSCRIPT_SIZE_BYTES = 10 * 1024 * 1024; // 10MB (TR specs)
 
   /**
    * @param {Object} pathResolver - Path resolution utility
@@ -312,15 +313,217 @@ class StorageService {
   }
 
   /**
+   * Ensure storage initialized and video ID valid
+   * @private
+   * @param {string} videoId - Video ID to validate
+   * @param {string} operation - Operation name for error context
+   * @returns {Promise<void>}
+   * @throws {Error} If initialization fails or video ID invalid
+   */
+  async _ensureInitializedWithValidId(videoId, operation) {
+    try {
+      await this.initialize();
+    } catch (initError) {
+      throw new Error(`Cannot ${operation} (initialization failed): ${initError.message}`);
+    }
+
+    if (!validators.isValidVideoId(videoId)) {
+      throw new Error(`Invalid video ID format: ${videoId}`);
+    }
+  }
+
+  /**
+   * Build transcript file path for video ID
+   * @private
+   * @param {string} videoId - YouTube video ID
+   * @returns {string} Absolute path to transcript file
+   */
+  _getTranscriptPath(videoId) {
+    return path.join(
+      this.paths.getTranscriptsPath(),
+      `${videoId}.md`
+    );
+  }
+
+  /**
+   * Handle read operation errors with consistent patterns
+   * @private
+   * @param {Error} error - File system error
+   * @param {string} videoId - Video ID for context
+   * @param {string} operation - Operation description
+   * @throws {Error} Contextualized error
+   */
+  _handleReadError(error, videoId, operation) {
+    if (error.code === 'ENOENT') {
+      throw new Error(`Transcript not found: ${videoId}`);
+    }
+
+    if (error.code === 'EACCES' || error.code === 'EPERM') {
+      throw new Error(`Permission denied ${operation} transcript ${videoId}`);
+    }
+
+    // Re-throw with original context for unexpected errors
+    throw error;
+  }
+
+  /**
+   * Handle existence check errors (returns false instead of throwing)
+   * @private
+   * @param {Error} error - File system error
+   * @param {string} videoId - Video ID for context
+   * @returns {boolean} Always false (non-existent or inaccessible)
+   */
+  _handleExistenceCheckError(error, videoId) {
+    if (error.code === 'ENOENT') {
+      return false;
+    }
+
+    if (error.code === 'EACCES' || error.code === 'EPERM') {
+      console.warn(`Permission denied checking transcript ${videoId}`);
+      return false;
+    }
+
+    console.warn(`Existence check failed for ${videoId}: ${error.message}`);
+    return false;
+  }
+
+  /**
+   * Handle delete operation errors
+   * @private
+   * @param {Error} error - File system error
+   * @param {string} videoId - Video ID for context
+   * @throws {Error} Contextualized error (or returns for ENOENT)
+   */
+  _handleDeleteError(error, videoId) {
+    // Idempotent - already deleted is success
+    if (error.code === 'ENOENT') {
+      return;
+    }
+
+    if (error.code === 'EISDIR' || error.code === 'EPERM') {
+      throw new Error(`Cannot delete: path is not a file (${videoId})`);
+    }
+
+    if (error.code === 'EACCES') {
+      throw new Error(`Permission denied deleting transcript ${videoId}`);
+    }
+
+    throw new Error(`Failed to delete transcript ${videoId}: ${error.message}`);
+  }
+
+  /**
    * Save transcript content to file (implements FR-2.3, TR-17)
+   * Validates inputs, enforces size limits, ensures directory structure
    *
    * @param {string} videoId - YouTube video ID
    * @param {string} content - Transcript text content
    * @returns {Promise<void>}
-   * @throws {Error} Not yet implemented
+   * @throws {Error} If video ID invalid, content invalid, or write fails
    */
   async saveTranscript(videoId, content) {
-    throw new Error('StorageService.saveTranscript not yet implemented');
+    await this._ensureInitializedWithValidId(videoId, 'save transcript');
+
+    // Guard: Validate content type and non-empty
+    if (typeof content !== 'string' || content.length === 0) {
+      throw new Error(`Invalid content: must be non-empty string (video ID: ${videoId})`);
+    }
+
+    // Guard: Check size limit (10MB per TR specs)
+    const contentSizeBytes = Buffer.byteLength(content, 'utf8');
+    if (contentSizeBytes > StorageService.MAX_TRANSCRIPT_SIZE_BYTES) {
+      throw new Error(
+        `Transcript exceeds ${StorageService.MAX_TRANSCRIPT_SIZE_BYTES} byte limit (${contentSizeBytes} bytes): ${videoId}`
+      );
+    }
+
+    const transcriptPath = this._getTranscriptPath(videoId);
+
+    // Ensure directory exists with explicit race handling
+    try {
+      await fs.ensureDir(path.dirname(transcriptPath));
+    } catch (dirError) {
+      // EEXIST is safe to ignore (another process created it)
+      if (dirError.code !== 'EEXIST') {
+        throw new Error(`Failed to create transcript directory: ${dirError.message}`);
+      }
+      // If EEXIST, directory exists - continue to write
+    }
+
+    // Write file
+    try {
+      await fs.writeFile(transcriptPath, content, { encoding: 'utf8' });
+    } catch (writeError) {
+      throw new Error(`Failed to write transcript ${videoId}: ${writeError.message}`);
+    }
+  }
+
+  /**
+   * Read transcript content from file
+   * Returns transcript text for cache hits and data inspection
+   *
+   * @param {string} videoId - YouTube video ID
+   * @returns {Promise<string>} Transcript content
+   * @throws {Error} If video ID invalid, file not found, or read fails
+   */
+  async readTranscript(videoId) {
+    await this._ensureInitializedWithValidId(videoId, 'read transcript');
+
+    const transcriptPath = this._getTranscriptPath(videoId);
+
+    try {
+      const content = await fs.readFile(transcriptPath, { encoding: 'utf8' });
+
+      // Guard: Reject empty files (corrupted data)
+      if (content.length === 0) {
+        throw new Error(`Transcript file is empty: ${videoId}`);
+      }
+
+      return content;
+    } catch (error) {
+      this._handleReadError(error, videoId, 'reading');
+    }
+  }
+
+  /**
+   * Check if transcript file exists
+   * Fast existence check for cache-first strategy
+   *
+   * @param {string} videoId - YouTube video ID
+   * @returns {Promise<boolean>} True if exists and valid, false otherwise
+   * @throws {Error} If video ID format invalid
+   */
+  async transcriptExists(videoId) {
+    await this._ensureInitializedWithValidId(videoId, 'check transcript existence');
+
+    const transcriptPath = this._getTranscriptPath(videoId);
+
+    try {
+      const stats = await fs.stat(transcriptPath);
+      return stats.isFile() && stats.size > 0;
+    } catch (error) {
+      return this._handleExistenceCheckError(error, videoId);
+    }
+  }
+
+  /**
+   * Delete transcript file (implements FR-6.2)
+   * Idempotent operation - succeeds if file already deleted
+   * Does not modify registry or links (separation of concerns)
+   *
+   * @param {string} videoId - YouTube video ID
+   * @returns {Promise<void>}
+   * @throws {Error} If video ID invalid or permission denied
+   */
+  async deleteTranscript(videoId) {
+    await this._ensureInitializedWithValidId(videoId, 'delete transcript');
+
+    const transcriptPath = this._getTranscriptPath(videoId);
+
+    try {
+      await fs.unlink(transcriptPath);
+    } catch (error) {
+      this._handleDeleteError(error, videoId);
+    }
   }
 
   /**
@@ -333,17 +536,6 @@ class StorageService {
    */
   async createSymlink(source, target) {
     throw new Error('StorageService.createSymlink not yet implemented');
-  }
-
-  /**
-   * Delete transcript file (implements FR-6.2)
-   *
-   * @param {string} videoId - YouTube video ID
-   * @returns {Promise<void>}
-   * @throws {Error} Not yet implemented
-   */
-  async deleteTranscript(videoId) {
-    throw new Error('StorageService.deleteTranscript not yet implemented');
   }
 
   // NOTE: Orchestration methods (addTranscript, removeTranscript, removeLink, hasTranscript,
