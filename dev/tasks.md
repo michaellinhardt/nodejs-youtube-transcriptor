@@ -11,22 +11,22 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
 
 ## 1.0 Project Initialization & Setup
 <!-- Estimated: 4 hours total -->
-- [ ] 1.1 Initialize npm package structure
-  - [ ] 1.1.1 Create package.json with global CLI configuration
-  - [ ] 1.1.2 Set up bin/transcriptor entry point
-  - [ ] 1.1.3 Configure package for npm link usage
-- [ ] 1.2 Install and configure dependencies
-  - [ ] 1.2.1 Install commander@^12.0.0 for CLI framework
-  - [ ] 1.2.2 Install axios@^1.7.0 for HTTP client
-  - [ ] 1.2.3 Install fs-extra@^11.0.0 for file operations
-  - [ ] 1.2.4 Install dotenv@^16.0.0 for environment variables
+- [x] 1.1 Initialize npm package structure
+  - [x] 1.1.1 Create package.json with global CLI configuration
+  - [x] 1.1.2 Verify src/index.js entry point (existing file with shebang)
+  - [x] 1.1.3 Configure package for npm link usage
+- [x] 1.2 Install and configure dependencies
+  - [x] 1.2.1 Install commander@^12.0.0 for CLI framework
+  - [x] 1.2.2 Install axios@^1.7.0 for HTTP client
+  - [x] 1.2.3 Install fs-extra@^11.0.0 for file operations
+  - [x] 1.2.4 Install dotenv@^16.0.0 for environment variables
 - [ ] 1.3 Set up project structure (implements TR-1, Module Structure)
   - [ ] 1.3.1 Create src/index.js for command router
   - [ ] 1.3.2 Create src/commands/ directory for command handlers
   - [ ] 1.3.3 Create src/services/ directory for business logic
   - [ ] 1.3.4 Create src/utils/ directory for shared utilities
 - [ ] 1.4 Configure environment setup
-  - [ ] 1.4.1 Create .env.example file
+  - [x] 1.4.1 Create .env.example file
   - [ ] 1.4.2 Create .gitignore with proper exclusions
   - [ ] 1.4.3 Set up ESLint and Prettier configuration
 
