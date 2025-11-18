@@ -253,13 +253,10 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 9.2.2 Add architecture diagrams
   - [x] 9.2.3 Document data flow
   - [x] 9.2.4 Create contribution guidelines
-- [ ] 9.3 Deployment preparation
-  - [ ] 9.3.1 Test npm link installation
-  - [ ] 9.3.2 Verify cross-platform compatibility
-  - [ ] 9.3.3 Create installation script
-  - [ ] 9.3.4 Add uninstall cleanup procedures
-- [ ] 9.4 Performance optimization
-  - [ ] 9.4.1 Optimize registry loading for large datasets
-  - [ ] 9.4.2 Implement progress indicators
-  - [ ] 9.4.3 Add verbose/quiet mode options
-  - [ ] 9.4.4 Profile and optimize bottlenecks
+- [ ] 9.3 Deployment preparation & Performance
+  - [ ] 9.3.1 Create installation script
+  - [ ] 9.3.2 Add uninstall cleanup procedures
+  - [ ] 9.3.4 Optimize registry loading for large datasets
+  - [ ] 9.3.4 Implement progress indicators
+  - [ ] 9.3.5 Add verbose/quiet mode options
+  - [ ] 9.3.6 Profile and optimize bottlenecks
