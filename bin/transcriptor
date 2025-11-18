@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+
+/**
+ * Transcriptor CLI Entry Point
+ *
+ * Responsibilities:
+ * - Provides executable shebang for npm bin
+ * - Loads environment configuration early
+ * - Delegates to command router
+ */
+
+const path = require('path');
+const envLoader = require('../src/utils/envLoader');
+
+// Load environment variables
+// This validates .env exists and contains required keys
+envLoader.load();
+
+// Delegate to command router
+require('../src/index.js');

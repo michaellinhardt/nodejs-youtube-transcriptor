@@ -20,40 +20,41 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 1.2.2 Install axios@^1.7.0 for HTTP client
   - [x] 1.2.3 Install fs-extra@^11.0.0 for file operations
   - [x] 1.2.4 Install dotenv@^16.0.0 for environment variables
-- [ ] 1.3 Set up project structure (implements TR-1, Module Structure)
-  - [ ] 1.3.1 Create src/index.js for command router
-  - [ ] 1.3.2 Create src/commands/ directory for command handlers
-  - [ ] 1.3.3 Create src/services/ directory for business logic
-  - [ ] 1.3.4 Create src/utils/ directory for shared utilities
-- [ ] 1.4 Configure environment setup
+- [x] 1.3 Set up project structure (implements TR-1, Module Structure)
+  - [x] 1.3.1 Create src/index.js for command router
+  - [x] 1.3.2 Create src/commands/ directory for command handlers
+  - [x] 1.3.3 Create src/services/ directory for business logic
+  - [x] 1.3.4 Create src/utils/ directory for shared utilities
+- [x] 1.4 Configure environment setup
   - [x] 1.4.1 Create .env.example file
-  - [ ] 1.4.2 Create .gitignore with proper exclusions
-  - [ ] 1.4.3 Set up ESLint and Prettier configuration
+  - [x] 1.4.2 Bug fixes and resilience improvements
+  - [ ] 1.4.3 Create .gitignore with proper exclusions
+  - [ ] 1.4.4 Set up ESLint and Prettier configuration
 
 ## 2.0 Core Infrastructure Development
 <!-- Estimated: 12 hours total | Blocks: 3.0, 4.0, 5.0 -->
-- [ ] 2.1 Path management system [CRITICAL PATH] (implements TR-10)
-  - [ ] 2.1.1 Create PathResolver utility for cross-platform paths
-  - [ ] 2.1.2 Implement home directory resolution
-  - [ ] 2.1.3 Define storage paths (~/.transcriptor structure)
-  - [ ] 2.1.4 Implement local project path resolution
-- [ ] 2.2 Environment configuration (implements TR-11)
-  - [ ] 2.2.1 Create environment loader with dotenv
-  - [ ] 2.2.2 Implement API key validation
-  - [ ] 2.2.3 Add error handling for missing configuration
-- [ ] 2.3 CLI framework setup (implements TR-18)
-  - [ ] 2.3.1 Set up commander.js in bin/transcriptor
-  - [ ] 2.3.2 Define command routing structure
-  - [ ] 2.3.3 Implement help text generation
-  - [ ] 2.3.4 Add version information display
+- [x] 2.1 Path management system [CRITICAL PATH] (implements TR-10)
+  - [x] 2.1.1 Create PathResolver utility for cross-platform paths
+  - [x] 2.1.2 Implement home directory resolution
+  - [x] 2.1.3 Define storage paths (~/.transcriptor structure)
+  - [x] 2.1.4 Implement local project path resolution
+- [x] 2.2 Environment configuration (implements TR-11)
+  - [x] 2.2.1 Create environment loader with dotenv
+  - [x] 2.2.2 Implement API key validation
+  - [x] 2.2.3 Add error handling for missing configuration
+- [x] 2.3 CLI framework setup (implements TR-18)
+  - [x] 2.3.1 Set up commander.js in bin/transcriptor
+  - [x] 2.3.2 Define command routing structure
+  - [x] 2.3.3 Implement help text generation
+  - [x] 2.3.4 Add version information display
 
 ## 3.0 Storage System Implementation
 <!-- Estimated: 16 hours total | Depends on: 2.1 -->
-- [ ] 3.1 Storage service core [CRITICAL PATH] (implements FR-3)
-  - [ ] 3.1.1 Create StorageService class structure
-  - [ ] 3.1.2 Implement initialization operations (TR-19)
-  - [ ] 3.1.3 Ensure ~/.transcriptor directory structure
-  - [ ] 3.1.4 Initialize empty data.json if missing
+- [x] 3.1 Storage service core [CRITICAL PATH] (implements FR-3)
+  - [x] 3.1.1 Create StorageService class structure
+  - [x] 3.1.2 Implement initialization operations (TR-19)
+  - [x] 3.1.3 Ensure ~/.transcriptor directory structure
+  - [x] 3.1.4 Initialize empty data.json if missing
 - [ ] 3.2 Registry operations (implements FR-3.2, TR-16)
   - [ ] 3.2.1 Implement registry loading from data.json
   - [ ] 3.2.2 Create registry update methods

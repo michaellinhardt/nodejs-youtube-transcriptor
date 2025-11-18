@@ -4,7 +4,7 @@
   "description": "CLI tool for extracting and managing YouTube video transcripts with centralized caching",
   "main": "src/index.js",
   "bin": {
-    "transcriptor": "./src/index.js"
+    "transcriptor": "./bin/transcriptor"
   },
   "scripts": {
     "test": "jest",
