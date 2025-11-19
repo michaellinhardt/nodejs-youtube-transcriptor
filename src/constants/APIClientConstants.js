@@ -7,8 +7,8 @@
  */
 
 const API_CLIENT_CONFIG = {
-  BASE_URL: 'https://api.scrape-creators.com',
-  ENDPOINT: '/transcript',
+  BASE_URL: 'https://api.scrapecreators.com',
+  ENDPOINT: '/v1/youtube/video/transcript',
   TIMEOUT_MS: 30000,
   API_KEY_HEADER: 'x-api-key',
   MAX_API_KEY_LENGTH: 500,

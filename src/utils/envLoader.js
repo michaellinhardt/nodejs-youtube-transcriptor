@@ -32,7 +32,7 @@ function load() {
   }
 
   // Load variables from .env
-  const result = dotenv.config();
+  const result = dotenv.config({ path: envPath });
 
   if (result.error) {
     console.error('Error loading .env file:', result.error.message);

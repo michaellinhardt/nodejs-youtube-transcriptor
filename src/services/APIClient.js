@@ -288,7 +288,7 @@ class APIClient {
    * @returns {Promise<string>} Transcript text
    */
   async executeApiRequest(videoUrl) {
-    const response = await this.httpClient.post(API_CLIENT_CONFIG.ENDPOINT, { url: videoUrl });
+    const response = await this.httpClient.get(API_CLIENT_CONFIG.ENDPOINT, { params: { url: videoUrl } });
 
     if (!response) {
       throw this.createAppError(ERROR_TYPES.VALIDATION, 'API returned null response object');
