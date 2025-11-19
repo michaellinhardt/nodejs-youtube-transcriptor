@@ -1,1 +1,0 @@
-/Users/teazyou/.transcriptor/transcripts/gtkRAXQf49k.md

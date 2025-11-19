@@ -1,1 +1,0 @@
-/Users/teazyou/.transcriptor/transcripts/F-m4AIU8blY.md
