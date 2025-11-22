@@ -486,3 +486,43 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform), 10.
   - [ ] 13.5.8 Test help, data, clean commands ignore --rag-generator flag
   - [ ] 13.5.9 Verify RAG process runs in ./transcripts directory context
   - [ ] 13.5.10 Test RAG error handling when claude command not installed
+
+## 14.0 RAG Generator Gemini Integration Feature
+
+<!-- Estimated: 8 hours total | Depends on: 13.0 | Implements FR-13, TR-45 through TR-49 -->
+
+- [ ] 14.1 CLI argument parsing implementation (implements FR-13.1, TR-45, TR-46)
+  - [ ] 14.1.1 Update bin/transcriptor to add --rag-generator-gemini option to commander configuration
+  - [ ] 14.1.2 Define --rag-generator-gemini flag as boolean with default false
+  - [ ] 14.1.3 Add description text: "Execute RAG generator Gemini after processing youtube.md"
+  - [ ] 14.1.4 Extract ragGeneratorGemini flag from command options object
+  - [ ] 14.1.5 Pass ragGeneratorGemini option to process command handler
+  - [ ] 14.1.6 Verify help text displays --rag-generator-gemini option (transcriptor --help)
+  - [ ] 14.1.7 Ensure flag is ignored for non-process commands (help, data, clean)
+- [ ] 14.2 RAG executor enhancement (implements FR-13.2, TR-47, TR-48)
+  - [ ] 14.2.1 Update RAGExecutor.execute() to accept commandType parameter ('default' | 'gemini')
+  - [ ] 14.2.2 Add command mapping logic: default -> /rag-generator, gemini -> /rag-generator-gemini
+  - [ ] 14.2.3 Update spawn command construction to use mapped command
+  - [ ] 14.2.4 Ensure backward compatibility with existing RAGExecutor.execute() calls
+  - [ ] 14.2.5 Update error messages to include command type for clarity
+- [ ] 14.3 Integration with processing workflow (implements FR-13.2, FR-13.3, TR-49)
+  - [ ] 14.3.1 Update src/commands/process.js to accept ragGeneratorGemini option
+  - [ ] 14.3.2 Add mutual exclusivity validation between ragGenerator and ragGeneratorGemini
+  - [ ] 14.3.3 Check if ragGeneratorGemini flag is true after processBatch completes
+  - [ ] 14.3.4 Call RAGExecutor.execute(projectDir, 'gemini') when ragGeneratorGemini is true
+  - [ ] 14.3.5 Update result object with ragGeneratorGemini execution status
+  - [ ] 14.3.6 Display execution status in console output ("Executing RAG generator Gemini in ./transcripts...")
+- [ ] 14.4 Error handling and logging (implements FR-13.3)
+  - [ ] 14.4.1 Ensure mutual exclusivity error is clear and actionable
+  - [ ] 14.4.2 Log all Gemini RAG errors with [RAG-GENERATOR-GEMINI] prefix for clarity
+  - [ ] 14.4.3 Ensure RAG Gemini failures are non-fatal (do not exit process)
+  - [ ] 14.4.4 Continue execution after RAG Gemini error, display final summary
+- [ ] 14.5 Documentation and verification (implements FR-8.6)
+  - [ ] 14.5.1 Update README.md with --rag-generator-gemini flag documentation
+  - [ ] 14.5.2 Add usage example: "transcriptor --rag-generator-gemini"
+  - [ ] 14.5.3 Explain RAG generator Gemini functionality and purpose
+  - [ ] 14.5.4 Document mutual exclusivity with --rag-generator
+  - [ ] 14.5.5 Test --rag-generator-gemini flag with valid youtube.md file
+  - [ ] 14.5.6 Test mutual exclusivity: transcriptor --rag-generator --rag-generator-gemini (should error)
+  - [ ] 14.5.7 Test help text includes --rag-generator-gemini option
+  - [ ] 14.5.8 Verify both RAG commands work independently

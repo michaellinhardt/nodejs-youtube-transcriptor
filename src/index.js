@@ -42,7 +42,8 @@ program
   .version(version)
   .option('-q, --quiet', 'Suppress all output except errors')
   .option('-v, --verbose', 'Show detailed operation logs')
-  .option('--rag-generator', 'Execute RAG generator after processing transcripts');
+  .option('--rag-generator', 'Execute RAG generator after processing transcripts')
+  .option('--rag-generator-gemini', 'Execute RAG generator Gemini after processing transcripts');
 
 /**
  * Setup verbosity based on command line flags

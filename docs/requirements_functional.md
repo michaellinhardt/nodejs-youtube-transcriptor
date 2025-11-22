@@ -174,6 +174,7 @@ FR-8.2: `transcriptor help` - Display usage information
 FR-8.3: `transcriptor data` - Show repository statistics
 FR-8.4: `transcriptor clean YYYY-MM-DD` - Remove old transcripts
 FR-8.5: `transcriptor --rag-generator` - Process youtube.md file with RAG generator execution
+FR-8.6: `transcriptor --rag-generator-gemini` - Process youtube.md file with RAG generator Gemini execution
 
 ## RAG Generator Integration
 
@@ -198,6 +199,30 @@ FR-12.3: RAG generator execution constraints
 - Context: Command runs within ./transcripts folder
 - Purpose: Enables automated Retrieval-Augmented Generation processing of fetched transcripts
 - Failure handling: If RAG command fails, system logs error but does not fail transcript processing
+
+### FR-13: RAG Generator Gemini Integration
+
+FR-13.1: System shall support RAG generator Gemini activation via CLI argument
+
+- Argument: `--rag-generator-gemini`
+- Behavior: Activates automated RAG Gemini processing after transcript completion
+- Applicability: Optional feature, disabled by default
+- Exclusivity: Cannot be used simultaneously with --rag-generator
+
+FR-13.2: System shall execute RAG generator Gemini after successful processing
+
+- Trigger: All transcripts from youtube.md processed successfully
+- Execution context: ./transcripts directory
+- Command: `gemini-rag-generator`
+- Timing: Executes only after main transcript processing completes
+
+FR-13.3: RAG generator Gemini execution constraints
+
+- Condition: Only executes if all transcript processing succeeds
+- Context: Command runs within ./transcripts folder
+- Purpose: Enables automated Retrieval-Augmented Generation processing using Gemini model
+- Failure handling: If RAG command fails, system logs error but does not fail transcript processing
+- Mutual exclusivity: If both --rag-generator and --rag-generator-gemini are provided, system should error
 
 ## Data Integrity
 

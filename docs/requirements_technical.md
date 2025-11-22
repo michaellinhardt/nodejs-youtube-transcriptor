@@ -1052,3 +1052,111 @@ EnvironmentLogging:
     transcript_error: process_continues_for_other_urls
     rag_error: process_exits_with_summary (RAG failure does_not_exit)
 ```
+
+## RAG Generator Gemini Integration
+
+### TR-45: RAG Generator Gemini CLI Option (implements FR-13.1)
+
+```yaml
+RAGGeneratorGeminiOption:
+  flag: --rag-generator-gemini
+  type: boolean
+  default: false
+  scope: main_command
+  parsing:
+    library: commander
+    method: .option('--rag-generator-gemini', 'Execute RAG generator Gemini after processing')
+  behavior: optional|feature_disabled_by_default
+  access: transcriptor --rag-generator-gemini
+  compatibility: works_with_help, data, clean commands (ignored for non-process operations)
+  mutual_exclusivity: cannot_be_used_with_rag_generator
+```
+
+### TR-46: Command-Line Argument Parsing (implements FR-13.1, FR-8.6)
+
+```yaml
+CLIArgumentParsing:
+  framework: commander
+  entry: bin/transcriptor
+  commands:
+    main:
+      name: transcriptor
+      options:
+        - name: --rag-generator
+          description: "Execute RAG generator after processing youtube.md"
+          type: boolean
+          default: false
+        - name: --rag-generator-gemini
+          description: "Execute RAG generator Gemini after processing youtube.md"
+          type: boolean
+          default: false
+      validation:
+        - mutually_exclusive: [--rag-generator, --rag-generator-gemini]
+        - error_message: "Cannot use both --rag-generator and --rag-generator-gemini simultaneously"
+  parsing_flow:
+    - commander.parse(process.argv)
+    - validate_mutual_exclusivity
+    - extract_flags_to_options_object
+    - pass_to_command_handler
+  flag_access:
+    processor: cmd.ragGenerator || cmd.ragGeneratorGemini
+    availability: after_command_parse
+```
+
+### TR-47: RAG Generator Gemini Process Execution (implements FR-13.2)
+
+```yaml
+ExecuteRAGGeneratorGemini:
+  timing: after_all_transcripts_processed_successfully
+  trigger:
+    - all_urls_from_youtube.md completed
+    - no_fatal_processing_errors
+    - --rag-generator-gemini_flag_true
+  execution_context:
+    cwd: ./transcripts # local project transcripts directory
+    command: gemini-rag-generator # standalone command
+  method: child_process.spawn
+  spawn_options:
+    stdio: inherit # output directly to console
+    shell: true # allows shell syntax parsing
+  error_isolation: nonfatal # RAG failure does not fail transcript processing
+```
+
+### TR-48: RAG Executor Command Type Support (implements FR-13.2)
+
+```yaml
+RAGExecutorCommandTypes:
+  supported_commands:
+    - type: default
+      command_type: claude
+      command: claude --dangerously-skip-permissions -p /rag-generator
+      description: Standard RAG processing using Claude CLI
+    - type: gemini
+      command_type: standalone
+      command: gemini-rag-generator
+      description: Gemini-based RAG processing using standalone command
+  implementation:
+    method: RAGExecutor.execute(projectDir, commandType)
+    parameter: commandType = 'default' | 'gemini'
+    command_mapping:
+      default:
+        type: claude
+        command: claude --dangerously-skip-permissions -p /rag-generator
+      gemini:
+        type: standalone
+        command: gemini-rag-generator
+```
+
+### TR-49: Mutual Exclusivity Validation (implements FR-13.3)
+
+```yaml
+MutualExclusivityValidation:
+  location: src/commands/process.js
+  validation_point: before_rag_execution
+  condition: ragGenerator && ragGeneratorGemini
+  error_handling:
+    message: "Error: Cannot use both --rag-generator and --rag-generator-gemini simultaneously"
+    action: throw_error
+    exit_code: 1
+  bypass: if_only_one_flag_true
+```

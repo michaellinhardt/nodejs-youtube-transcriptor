@@ -12,7 +12,7 @@ const pathResolver = require('../utils/pathResolver');
 /**
  * Process Command Handler
  *
- * Implements FR-8.1 main command, TR-1 processing pipeline, FR-12 RAG generator integration
+ * Implements FR-8.1 main command, TR-1 processing pipeline, FR-12 RAG generator integration, FR-13 RAG generator Gemini integration
  *
  * Workflow:
  * 1. Validate youtube.md exists (FR-1.2)
@@ -21,6 +21,7 @@ const pathResolver = require('../utils/pathResolver');
  * 4. Delegate to TranscriptService.processBatch()
  * 5. Report results
  * 6. Execute RAG generator if --rag-generator flag provided (FR-12.2)
+ * 7. Execute RAG generator Gemini if --rag-generator-gemini flag provided (FR-13.2)
  *
  * Security considerations (TR-13, Security):
  * - Validate file size before reading (max 10MB)
@@ -30,10 +31,18 @@ const pathResolver = require('../utils/pathResolver');
  *
  * @param {Object} options - Command options from CLI
  * @param {boolean} options.ragGenerator - Execute RAG generator after processing
+ * @param {boolean} options.ragGeneratorGemini - Execute RAG generator Gemini after processing
  * @returns {Promise<Object>} Result object with success status
  */
 async function processCommand(options = {}) {
-  const { ragGenerator = false } = options;
+  const { ragGenerator = false, ragGeneratorGemini = false } = options;
+
+  // TR-49: Validate mutual exclusivity of RAG generator flags
+  if (ragGenerator && ragGeneratorGemini) {
+    console.error('\nError: Cannot use both --rag-generator and --rag-generator-gemini simultaneously');
+    console.error('Please use only one RAG generator option at a time.\n');
+    return { success: false, reason: 'mutually_exclusive_flags' };
+  }
   try {
     console.log('\n=== Processing YouTube Transcripts ===\n');
 
@@ -128,36 +137,45 @@ async function processCommand(options = {}) {
     // Step 4: Display results
     displayResults(results, uniqueUrls.length);
 
-    // Step 5: Execute RAG generator if requested (implements FR-12.2, TR-41)
-    if (ragGenerator && results.processed > 0) {
+    // Step 5: Execute RAG generator if requested (implements FR-12.2, FR-13.2, TR-41)
+    if ((ragGenerator || ragGeneratorGemini) && results.processed > 0) {
       try {
-        console.log('\n[RAG-GENERATOR] Executing RAG generator in ./transcripts...');
+        const commandType = ragGeneratorGemini ? 'gemini' : 'default';
+        const logPrefix = ragGeneratorGemini ? '[RAG-GENERATOR-GEMINI]' : '[RAG-GENERATOR]';
+
+        console.log(`\n${logPrefix} Executing RAG generator in ./transcripts...`);
 
         const RAGExecutor = require('../utils/RAGExecutor');
-        const ragResult = await RAGExecutor.execute(process.cwd());
+        const ragResult = await RAGExecutor.execute(process.cwd(), commandType);
 
         if (ragResult.error) {
           // TR-40: Non-fatal error logging
-          console.error(`[RAG-GENERATOR] Error: ${ragResult.error}`);
+          console.error(`${logPrefix} Error: ${ragResult.error}`);
 
           // Provide installation hint for common error
           if (ragResult.error.includes('not found')) {
-            console.error(
-              '[RAG-GENERATOR] Hint: Install with: npm install -g @anthropic-ai/claude-code'
-            );
+            const installHint = ragGeneratorGemini
+              ? 'Ensure gemini-rag-generator is installed and available in your PATH'
+              : 'Install with: npm install -g @anthropic-ai/claude-code';
+            console.error(`${logPrefix} Hint: ${installHint}`);
           }
         } else if (ragResult.exitCode === 0) {
-          console.log('[RAG-GENERATOR] Completed successfully');
+          console.log(`${logPrefix} Completed successfully`);
         } else if (ragResult.exitCode !== null) {
-          console.warn(`[RAG-GENERATOR] Process exited with code ${ragResult.exitCode}`);
-          console.warn('[RAG-GENERATOR] Check ./transcripts directory for partial output');
+          console.warn(`${logPrefix} Process exited with code ${ragResult.exitCode}`);
+          console.warn(`${logPrefix} Check ./transcripts directory for partial output`);
         }
 
         // TR-42: Add RAG status to results object
-        results.ragGenerator = ragResult;
+        if (ragGeneratorGemini) {
+          results.ragGeneratorGemini = ragResult;
+        } else {
+          results.ragGenerator = ragResult;
+        }
       } catch (error) {
         // TR-40: Catch any unexpected errors, log and continue
-        console.error(`[RAG-GENERATOR] Unexpected error: ${error.message}`);
+        const logPrefix = ragGeneratorGemini ? '[RAG-GENERATOR-GEMINI]' : '[RAG-GENERATOR]';
+        console.error(`${logPrefix} Unexpected error: ${error.message}`);
       }
     }
 
