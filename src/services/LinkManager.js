@@ -31,6 +31,7 @@ class LinkManager {
   /**
    * Create symbolic link for transcript in project directory
    * Implements FR-4.1, TR-9 with cross-platform support
+   * Supports metadata-based filenames
    *
    * @param {string} videoId - YouTube video identifier (11 chars)
    * @param {string} projectDir - Absolute path to project directory
@@ -49,9 +50,16 @@ class LinkManager {
       throw new Error('Project directory must be absolute path');
     }
 
-    const sourcePath = path.join(this.paths.getTranscriptsPath(), `${videoId}.md`);
+    // Find existing transcript file (handles both old and new filename formats)
+    const sourcePath = await this.storage.getTranscriptPath(videoId);
+    if (!sourcePath) {
+      throw new Error(`Source transcript not found: ${videoId}`);
+    }
+
+    // Use same filename for target as source
+    const sourceFilename = path.basename(sourcePath);
     const targetDir = path.join(absoluteProjectDir, 'transcripts');
-    const targetPath = path.join(targetDir, `${videoId}.md`);
+    const targetPath = path.join(targetDir, sourceFilename);
 
     // Validate source exists
     if (!(await fs.pathExists(sourcePath))) {

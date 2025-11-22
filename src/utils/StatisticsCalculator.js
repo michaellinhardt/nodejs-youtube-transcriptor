@@ -45,9 +45,10 @@ async function calculateStatistics(registry, storagePath) {
 /**
  * Calculate statistics using metadata only (optimized for cache)
  * Avoids loading full registry
+ * Includes per-entry details for metadata display
  * @param {Array} metadata - Registry metadata array
  * @param {string} storagePath - Path to ~/.transcriptor
- * @returns {Promise<Object>} Statistics object
+ * @returns {Promise<Object>} Statistics object with entries
  */
 async function calculateStatisticsFromMetadata(metadata, storagePath) {
   // Guard: Validate storage path
@@ -62,19 +63,29 @@ async function calculateStatisticsFromMetadata(metadata, storagePath) {
 
   const total = metadata.length;
   const dates = metadata
-    .map(m => m.date)
-    .filter(d => d && typeof d === 'string' && d.trim() !== '')
+    .map((m) => m.date)
+    .filter((d) => d && typeof d === 'string' && d.trim() !== '')
     .sort();
 
   const oldest = dates.length > 0 ? dates[0] : null;
   const newest = dates.length > 0 ? dates[dates.length - 1] : null;
   const size = await getFolderSize(storagePath);
 
+  // Build entries array with metadata
+  const entries = metadata.map((m) => ({
+    videoId: m.id,
+    channel: m.channel,
+    title: m.title,
+    date_added: m.date,
+    links: m.links || [],
+  }));
+
   return {
     total,
     size,
     oldest,
-    newest
+    newest,
+    entries,
   };
 }
 

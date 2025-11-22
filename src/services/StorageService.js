@@ -13,7 +13,7 @@ const RegistryCache = require('./RegistryCache');
  * @class StorageService
  */
 class StorageService {
-  static ALLOWED_ENTRY_KEYS = ['date_added', 'links'];
+  static ALLOWED_ENTRY_KEYS = ['date_added', 'channel', 'title', 'links'];
   static REGISTRY_WRITE_OPTIONS = {
     spaces: 2,
     encoding: 'utf8',
@@ -225,6 +225,7 @@ class StorageService {
   /**
    * Validate registry entry structure
    * Checks entry has required fields with correct types
+   * Implements FR-3.2 registry schema with metadata fields
    * @private
    */
   isValidEntryStructure(entry) {
@@ -237,6 +238,31 @@ class StorageService {
     if (!Array.isArray(entry.links)) {
       return false;
     }
+
+    // Channel optional (backward compatibility) but must be non-empty string if present
+    if (entry.channel !== undefined) {
+      if (typeof entry.channel !== 'string' || entry.channel.trim() === '') {
+        return false;
+      }
+      // CRITICAL: Validate channel length (prevent abuse)
+      if (entry.channel.length > 200) {
+        console.warn(`Channel name exceeds 200 chars`);
+        return false;
+      }
+    }
+
+    // Title optional (backward compatibility) but must be non-empty string if present
+    if (entry.title !== undefined) {
+      if (typeof entry.title !== 'string' || entry.title.trim() === '') {
+        return false;
+      }
+      // CRITICAL: Validate title length (prevent abuse)
+      if (entry.title.length > 500) {
+        console.warn(`Title exceeds 500 chars`);
+        return false;
+      }
+    }
+
     return true;
   }
 
@@ -389,13 +415,114 @@ class StorageService {
   }
 
   /**
+   * Build transcript filename from video ID and metadata
+   * CRITICAL: Implements FR-2.4, TR-23 metadata-based naming
+   * @param {string} videoId - YouTube video ID
+   * @param {Object} metadata - {channel, title} (optional for backward compatibility)
+   * @returns {string} Filename: {videoId}_{formattedTitle}.md or {videoId}.md
+   */
+  async buildFilename(videoId, metadata) {
+    // Backward compatibility: old format if no metadata
+    if (!metadata || !metadata.title) {
+      return `${videoId}.md`;
+    }
+
+    // Format title for filesystem safety
+    const MetadataService = require('./MetadataService');
+    const metadataService = new MetadataService();
+    const formattedTitle = metadataService.formatTitle(metadata.title);
+
+    // Construct base filename
+    let filename = `${videoId}_${formattedTitle}.md`;
+
+    // CRITICAL: Validate total length < 255 (filesystem limit)
+    if (filename.length > 255) {
+      // Truncate formatted title to fit
+      const maxTitleLength = 255 - videoId.length - 4; // 4 chars for "_.md"
+      const truncatedTitle = formattedTitle.substring(0, maxTitleLength);
+      filename = `${videoId}_${truncatedTitle}.md`;
+    }
+
+    // CRITICAL: Handle filename collisions (different videos, same sanitized title)
+    const transcriptsPath = this.paths.getTranscriptsPath();
+    let finalFilename = filename;
+    let collisionIndex = 2;
+
+    // Check for existing files with different video IDs
+    while (await fs.pathExists(path.join(transcriptsPath, finalFilename))) {
+      // Read existing file to check video ID
+      const existingContent = await fs.readFile(
+        path.join(transcriptsPath, finalFilename),
+        'utf8'
+      );
+
+      // If same video ID, this is the correct file (updating metadata)
+      if (existingContent.includes(`Youtube ID: ${videoId}`)) {
+        break;
+      }
+
+      // Different video ID - add collision suffix
+      const baseName = filename.replace('.md', '');
+      finalFilename = `${baseName}_${collisionIndex}.md`;
+      collisionIndex++;
+
+      // Safety limit to prevent infinite loop
+      if (collisionIndex > 100) {
+        throw new Error(`Excessive filename collisions for: ${filename}`);
+      }
+    }
+
+    return finalFilename;
+  }
+
+  /**
    * Build transcript file path for video ID
    * @private
    * @param {string} videoId - YouTube video ID
-   * @returns {string} Absolute path to transcript file
+   * @param {Object} metadata - {channel, title} (optional)
+   * @returns {Promise<string>} Absolute path to transcript file
    */
-  _getTranscriptPath(videoId) {
-    return path.join(this.paths.getTranscriptsPath(), `${videoId}.md`);
+  async _getTranscriptPath(videoId, metadata) {
+    const filename = await this.buildFilename(videoId, metadata);
+    return path.join(this.paths.getTranscriptsPath(), filename);
+  }
+
+  /**
+   * Build metadata header for transcript file
+   * CRITICAL: Implements FR-11, TR-27 metadata header
+   * @param {Object} metadata - {channel, title}
+   * @param {string} videoId - Video ID
+   * @returns {string} Formatted header
+   */
+  buildMetadataHeader(metadata, videoId) {
+    const { channel, title } = metadata;
+
+    // Validate inputs
+    if (!channel || !title || !videoId) {
+      throw new Error('All metadata fields required for header generation');
+    }
+
+    // Build short URL with validation
+    const MetadataService = require('./MetadataService');
+    const metadataService = new MetadataService();
+    const shortUrl = metadataService.buildShortUrl(videoId);
+
+    // Format header with markdown structure (preserve original title, no sanitization)
+    const header = [
+      `# Transcript`,
+      ``,
+      `## Information`,
+      ``,
+      `Channel: ${channel}`,
+      `Title: ${title}`,
+      `Youtube ID: ${videoId}`,
+      `URL: ${shortUrl}`,
+      ``,
+      `## Content`,
+      ``,
+    ].join('\n');
+
+    return header;
   }
 
   /**
@@ -484,15 +611,17 @@ class StorageService {
   }
 
   /**
-   * Save transcript content to file (implements FR-2.3, TR-17)
+   * Save transcript content to file (implements FR-2.3, TR-17, FR-11)
    * Validates inputs, enforces size limits, ensures directory structure
+   * Supports metadata headers and metadata-based filenames
    *
    * @param {string} videoId - YouTube video ID
    * @param {string} content - Transcript text content
-   * @returns {Promise<void>}
+   * @param {Object} metadata - {channel, title} (optional for backward compatibility)
+   * @returns {Promise<string>} Absolute path to saved file
    * @throws {Error} If video ID invalid, content invalid, or write fails
    */
-  async saveTranscript(videoId, content) {
+  async saveTranscript(videoId, content, metadata) {
     await this._ensureInitializedWithValidId(videoId, 'save transcript');
 
     // Guard: Validate content type and non-empty
@@ -500,15 +629,24 @@ class StorageService {
       throw new Error(`Invalid content: must be non-empty string (video ID: ${videoId})`);
     }
 
-    // Guard: Check size limit (10MB per TR specs)
-    const contentSizeBytes = Buffer.byteLength(content, 'utf8');
+    // Build file content with optional metadata header
+    let fileContent = content;
+    if (metadata && metadata.channel && metadata.title) {
+      const header = this.buildMetadataHeader(metadata, videoId);
+      fileContent = `${header}\n${content}`;
+    }
+
+    // Validate size BEFORE building filename (fail fast)
+    const contentSizeBytes = Buffer.byteLength(fileContent, 'utf8');
     if (contentSizeBytes > StorageService.MAX_TRANSCRIPT_SIZE_BYTES) {
       throw new Error(
         `Transcript exceeds ${StorageService.MAX_TRANSCRIPT_SIZE_BYTES} byte limit (${contentSizeBytes} bytes): ${videoId}`
       );
     }
 
-    const transcriptPath = this._getTranscriptPath(videoId);
+    // Build filename with collision detection
+    const filename = await this.buildFilename(videoId, metadata);
+    const transcriptPath = path.join(this.paths.getTranscriptsPath(), filename);
 
     // Ensure directory exists with explicit race handling
     try {
@@ -521,17 +659,51 @@ class StorageService {
       // If EEXIST, directory exists - continue to write
     }
 
-    // Write file
+    // Write file atomically
+    const tempPath = `${transcriptPath}.tmp`;
     try {
-      await fs.writeFile(transcriptPath, content, { encoding: 'utf8' });
-    } catch (writeError) {
-      throw new Error(`Failed to write transcript ${videoId}: ${writeError.message}`);
+      await fs.writeFile(tempPath, fileContent, 'utf8');
+      await fs.rename(tempPath, transcriptPath);
+    } catch (error) {
+      // Clean up temp file on failure
+      await fs.remove(tempPath).catch(() => {});
+      throw new Error(`Failed to write transcript ${videoId}: ${error.message}`);
+    }
+
+    // CRITICAL: Invalidate registry cache after file write
+    this.cache.invalidate();
+
+    return transcriptPath;
+  }
+
+  /**
+   * Get transcript file path (searches for metadata-based filenames)
+   * @param {string} videoId - YouTube video ID
+   * @returns {Promise<string|null>} File path or null if not found
+   */
+  async getTranscriptPath(videoId) {
+    const transcriptsPath = this.paths.getTranscriptsPath();
+
+    try {
+      const files = await fs.readdir(transcriptsPath);
+
+      // Search for files matching {videoId}_*.md or {videoId}.md
+      const match = files.find(
+        (file) =>
+          (file.startsWith(`${videoId}_`) && file.endsWith('.md')) || file === `${videoId}.md`
+      );
+
+      return match ? path.join(transcriptsPath, match) : null;
+    } catch (error) {
+      console.warn(`Error finding transcript for ${videoId}: ${error.message}`);
+      return null;
     }
   }
 
   /**
    * Read transcript content from file
    * Returns transcript text for cache hits and data inspection
+   * Supports both old and new filename formats
    *
    * @param {string} videoId - YouTube video ID
    * @returns {Promise<string>} Transcript content
@@ -540,7 +712,11 @@ class StorageService {
   async readTranscript(videoId) {
     await this._ensureInitializedWithValidId(videoId, 'read transcript');
 
-    const transcriptPath = this._getTranscriptPath(videoId);
+    const transcriptPath = await this.getTranscriptPath(videoId);
+
+    if (!transcriptPath) {
+      throw new Error(`Transcript not found: ${videoId}`);
+    }
 
     try {
       const content = await fs.readFile(transcriptPath, { encoding: 'utf8' });
@@ -559,6 +735,7 @@ class StorageService {
   /**
    * Check if transcript file exists
    * Fast existence check for cache-first strategy
+   * Supports both old and new filename formats
    *
    * @param {string} videoId - YouTube video ID
    * @returns {Promise<boolean>} True if exists and valid, false otherwise
@@ -567,7 +744,11 @@ class StorageService {
   async transcriptExists(videoId) {
     await this._ensureInitializedWithValidId(videoId, 'check transcript existence');
 
-    const transcriptPath = this._getTranscriptPath(videoId);
+    const transcriptPath = await this.getTranscriptPath(videoId);
+
+    if (!transcriptPath) {
+      return false;
+    }
 
     try {
       const stats = await fs.stat(transcriptPath);
@@ -581,6 +762,7 @@ class StorageService {
    * Delete transcript file (implements FR-6.2)
    * Idempotent operation - succeeds if file already deleted
    * Does not modify registry or links (separation of concerns)
+   * Supports both old and new filename formats
    *
    * @param {string} videoId - YouTube video ID
    * @returns {Promise<void>}
@@ -589,7 +771,12 @@ class StorageService {
   async deleteTranscript(videoId) {
     await this._ensureInitializedWithValidId(videoId, 'delete transcript');
 
-    const transcriptPath = this._getTranscriptPath(videoId);
+    const transcriptPath = await this.getTranscriptPath(videoId);
+
+    if (!transcriptPath) {
+      // File already deleted - idempotent
+      return;
+    }
 
     try {
       await fs.unlink(transcriptPath);

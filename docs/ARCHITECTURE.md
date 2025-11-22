@@ -68,10 +68,12 @@ graph TD
     B4 --> M
 
     C --> D[APIClient]
+    C --> MS[MetadataService]
     C --> C2
     C --> F[LinkManager]
 
     D --> G[Scrape Creators API<br/>External]
+    MS --> YT[YouTube oEmbed API<br/>External]
     C2 --> H[Filesystem<br/>~/.transcriptor]
     F --> H
 
@@ -84,6 +86,9 @@ graph TD
     D --> E2[URLValidator]
     D --> E3[ValidationHelpers]
 
+    MS --> TF[TitleFormatter]
+    MS --> US[URLShortener]
+
     C --> CF[ConsoleFormatter]
     C --> RF[ResultFactory]
     C --> LM[LogMessages]
@@ -93,9 +98,11 @@ graph TD
     style C fill:#e8f5e9
     style C2 fill:#e8f5e9
     style D fill:#e8f5e9
+    style MS fill:#e8f5e9
     style F fill:#e8f5e9
     style M fill:#e8f5e9
     style G fill:#ffebee
+    style YT fill:#ffebee
     style H fill:#ffebee
 ```
 
@@ -164,38 +171,43 @@ program.action(() => require('./commands/process')());
 
 #### TranscriptService (src/services/TranscriptService.js)
 
-**Responsibility**: Orchestrate transcript acquisition with cache-first strategy
+**Responsibility**: Orchestrate transcript and metadata acquisition with cache-first strategy
 
 **Key Functions**:
-- Check cache before API calls (FR-2.2, TR-6)
-- Fetch transcripts via APIClient when cache miss
-- Save transcripts immediately (FR-2.3, crash resilience)
+- Check cache before API calls (FR-2.3, TR-6)
+- Fetch transcripts and metadata in parallel via APIClient and MetadataService (FR-2.1, FR-2.2)
+- Save transcripts with metadata headers immediately (FR-2.4, FR-11, crash resilience)
+- Generate filenames using formatted titles (FR-2.5)
 - Create symbolic links via LinkManager
 - Track statistics (cache hits, misses, links created)
 - Process URLs sequentially (one at a time)
 
-**Dependencies**: StorageService, APIClient, LinkManager, PathResolver
+**Dependencies**: StorageService, APIClient, MetadataService, LinkManager, PathResolver
 
 **Key Methods**:
 ```javascript
 class TranscriptService {
   async processBatch(urls) // Process multiple URLs sequentially
-  async processVideo(videoId, url) // Process single video (TR-7 workflow)
+  async processVideo(videoId, url) // Process single video (TR-25 workflow)
   async _checkCache(videoId) // Verify cache hit/miss
   async _getOrFetchTranscript(videoId, url) // Get cached or fetch new
+  async _fetchMetadataAndTranscript(videoId, url) // Parallel fetch (TR-25)
   extractVideoId(url) // Parse YouTube ID from URL (TR-5)
 }
 ```
 
-**Processing Workflow** (TR-7):
+**Processing Workflow** (TR-25):
 1. Extract video ID from URL
 2. Check cache (registry + file existence)
 3. If cache hit: load transcript from storage
-4. If cache miss: fetch from API
-5. Save transcript to storage
-6. Create symbolic link
-7. Update registry
-8. Persist registry atomically
+4. If cache miss:
+   - Fetch transcript and metadata in parallel (Promise.all)
+   - Format title for filename
+   - Build metadata header
+   - Save transcript with header
+5. Create symbolic link (using formatted title in filename)
+6. Update registry (with metadata: channel, title)
+7. Persist registry atomically
 
 #### StorageService (src/services/StorageService.js)
 
@@ -230,15 +242,19 @@ class StorageService {
 {
   "videoId1": {
     "date_added": "2025-11-19",
+    "channel": "JavaScript Mastery",
+    "title": "How to Build REST APIs - Complete Tutorial",
     "links": [
-      "/absolute/path/to/project1/transcripts/videoId1.md",
-      "/absolute/path/to/project2/transcripts/videoId1.md"
+      "/absolute/path/to/project1/transcripts/videoId1_how_to_build_rest_apis_complete_tutorial.md",
+      "/absolute/path/to/project2/transcripts/videoId1_how_to_build_rest_apis_complete_tutorial.md"
     ]
   },
   "videoId2": {
     "date_added": "2025-11-18",
+    "channel": "Tech with Tim",
+    "title": "Python Tutorial for Beginners",
     "links": [
-      "/absolute/path/to/project1/transcripts/videoId2.md"
+      "/absolute/path/to/project1/transcripts/videoId2_python_tutorial_for_beginners.md"
     ]
   }
 }
@@ -278,6 +294,49 @@ class APIClient {
 - 500 Server Error → Skip URL, continue
 - Timeout → Skip URL, continue
 
+#### MetadataService (src/services/MetadataService.js)
+
+**Responsibility**: Fetch video metadata from YouTube oEmbed API and format for file operations
+
+**Key Functions**:
+- Fetch video title and channel name via YouTube oEmbed API (FR-2.2)
+- Format titles for filesystem compatibility (FR-2.5)
+- Build standardized short URLs (FR-3.3)
+- Build metadata headers for transcript files (FR-11)
+- Handle metadata fetch failures gracefully (non-fatal, TR-29)
+- No authentication required (public API)
+
+**Dependencies**: axios
+
+**Key Methods**:
+```javascript
+class MetadataService {
+  async fetchVideoMetadata(videoId) // Fetch from oEmbed API (TR-20)
+  formatTitle(title) // Sanitize for filename (TR-21, TR-26)
+  buildShortUrl(videoId) // Generate youtu.be URL (TR-22, TR-28)
+  buildMetadataHeader(metadata, videoId) // Create file header (TR-27)
+  _handleMetadataError(error) // Non-fatal error handling
+}
+```
+
+**Error Handling** (TR-29):
+- 404 Not Found → Use fallback values, log warning, continue
+- 400 Bad Request → Use fallback values, log warning, continue
+- 500 Server Error → Use fallback values, log warning, continue
+- Timeout (15s) → Use fallback values, log warning, continue
+- **No retry logic** (metadata is non-critical)
+
+**Fallback Values**:
+- channel: "Unknown Channel"
+- title: "Unknown Title"
+
+**Title Formatting** (TR-26):
+- Lowercase transformation
+- Spaces to underscores
+- Remove non-alphanumeric characters (except dash/underscore)
+- Truncate to 100 characters
+- Fallback: "untitled"
+
 #### LinkManager (src/services/LinkManager.js)
 
 **Responsibility**: Create and manage symbolic links between central storage and project directories
@@ -303,9 +362,10 @@ class LinkManager {
 
 **Link Structure**:
 ```
-Source: ~/.transcriptor/transcripts/videoId.md
-Target: ./transcripts/videoId.md (project-local)
+Source: ~/.transcriptor/transcripts/{videoId}_{formattedTitle}.md
+Target: ./transcripts/{videoId}_{formattedTitle}.md (project-local)
 Type: Symbolic link
+Filename: Built from registry metadata (channel and title)
 ```
 
 #### MaintenanceService (src/services/MaintenanceService.js)
@@ -393,24 +453,38 @@ sequenceDiagram
         else Cache Miss
             FS-->>Storage: File not found
             Storage-->>TS: false
-            TS->>API: fetchTranscript(url)
-            API->>API: Add x-api-key header
-            API->>ScrapeAPI: POST /transcript {url}
-            ScrapeAPI-->>API: {transcript_only_text}
-            API->>API: Validate response
-            API-->>TS: Transcript content
+            TS->>TS: Parallel fetch transcript and metadata
+            par Fetch Transcript
+                TS->>API: fetchTranscript(url)
+                API->>API: Add x-api-key header
+                API->>ScrapeAPI: POST /transcript {url}
+                ScrapeAPI-->>API: {transcript_only_text}
+                API->>API: Validate response
+                API-->>TS: Transcript content
+            and Fetch Metadata
+                TS->>MS: fetchVideoMetadata(videoId)
+                MS->>YT: GET /oembed?url=...&format=json
+                YT-->>MS: {title, author_name}
+                MS->>MS: Validate response or use fallback
+                MS-->>TS: {channel, title}
+            end
 
-            TS->>Storage: saveTranscript(videoId, content)
-            Storage->>FS: Write ~/.transcriptor/transcripts/id.md
+            TS->>MS: formatTitle(metadata.title)
+            MS-->>TS: formattedTitle
+            TS->>MS: buildMetadataHeader(metadata, videoId)
+            MS-->>TS: headerText
+
+            TS->>Storage: saveTranscript(videoId, formattedTitle, headerText + content)
+            Storage->>FS: Write ~/.transcriptor/transcripts/{id}_{formattedTitle}.md
             FS-->>Storage: Success
 
-            TS->>Storage: updateRegistry(videoId, date)
+            TS->>Storage: updateRegistry(videoId, metadata, date)
             Storage->>FS: Atomic write data.json
         end
 
-        TS->>LinkMgr: createLink(videoId)
+        TS->>LinkMgr: createLink(videoId, formattedTitle)
         LinkMgr->>FS: Ensure ./transcripts/ directory
-        LinkMgr->>FS: Create symlink ./transcripts/id.md
+        LinkMgr->>FS: Create symlink ./transcripts/{id}_{formattedTitle}.md
         FS-->>LinkMgr: Link created
         LinkMgr->>Storage: Add link path to registry
         Storage->>FS: Atomic write data.json
@@ -430,12 +504,17 @@ sequenceDiagram
 3. **Integrity Check**: MaintenanceService validates registry against filesystem, removes orphaned entries
 4. **Batch Processing**: TranscriptService processes URLs sequentially
 5. **Cache Check**: For each video, check if transcript exists in cache (registry + file)
-6. **API Fetch** (cache miss): Fetch transcript from Scrape Creators API with retry logic
-7. **Storage**: Save transcript to ~/.transcriptor/transcripts/ immediately
-8. **Registry Update**: Add entry to data.json with date_added and empty links array
-9. **Link Creation**: Create symbolic link in ./transcripts/ pointing to central storage
-10. **Link Tracking**: Add link path to registry entry
-11. **Summary**: Display processing results (success count, cache hits, failures)
+6. **API Fetch** (cache miss):
+   - Fetch transcript and metadata in parallel using Promise.all
+   - Transcript from Scrape Creators API (with retry logic)
+   - Metadata from YouTube oEmbed API (no retry, non-fatal)
+7. **Title Formatting**: Sanitize title for filesystem compatibility
+8. **Metadata Header**: Build header with channel, title, video ID, and URL
+9. **Storage**: Save transcript with metadata header to ~/.transcriptor/transcripts/{id}_{formattedTitle}.md immediately
+10. **Registry Update**: Add entry to data.json with date_added, channel, title, and empty links array
+11. **Link Creation**: Create symbolic link in ./transcripts/ pointing to central storage (using formatted title in filename)
+12. **Link Tracking**: Add link path to registry entry
+13. **Summary**: Display processing results (success count, cache hits, failures)
 
 ## Storage Architecture
 
@@ -444,20 +523,20 @@ graph TD
     A["~/.transcriptor/<br/>(Central Storage)"] --> B["data.json<br/>(Registry)"]
     A --> C["transcripts/"]
 
-    C --> C1["dQw4w9WgXcQ.md<br/>(Video 1 transcript)"]
-    C --> C2["jNQXAC9IVRw.md<br/>(Video 2 transcript)"]
-    C --> C3["9bZkp7q19f0.md<br/>(Video N transcript)"]
+    C --> C1["dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(Video 1 transcript)"]
+    C --> C2["jNQXAC9IVRw_python_tutorial.md<br/>(Video 2 transcript)"]
+    C --> C3["9bZkp7q19f0_react_hooks.md<br/>(Video N transcript)"]
 
-    D["./project1/transcripts/<br/>(Project Local)"] --> D1["dQw4w9WgXcQ.md<br/>(symlink)"]
-    D --> D2["jNQXAC9IVRw.md<br/>(symlink)"]
+    D["./project1/transcripts/<br/>(Project Local)"] --> D1["dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(symlink)"]
+    D --> D2["jNQXAC9IVRw_python_tutorial.md<br/>(symlink)"]
 
-    E["./project2/transcripts/<br/>(Project Local)"] --> E1["dQw4w9WgXcQ.md<br/>(symlink)"]
+    E["./project2/transcripts/<br/>(Project Local)"] --> E1["dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(symlink)"]
 
     D1 -.->|"points to"| C1
     D2 -.->|"points to"| C2
     E1 -.->|"points to"| C1
 
-    B --> F["Registry Entry:<br/>{<br/>  date_added: '2025-11-19',<br/>  links: [...]<br/>}"]
+    B --> F["Registry Entry:<br/>{<br/>  date_added: '2025-11-19',<br/>  channel: 'JavaScript Mastery',<br/>  title: 'How to Build REST APIs',<br/>  links: [...]<br/>}"]
 
     style A fill:#e8f5e9
     style B fill:#fff3e0
@@ -483,22 +562,26 @@ graph TD
   - `data.json`: Registry tracking all transcripts and links
   - `transcripts/`: Directory containing transcript markdown files
 
-**Transcript Files** (`~/.transcriptor/transcripts/{videoId}.md`):
-- **Naming**: Video ID as filename (11-character alphanumeric)
-- **Format**: Plain text markdown (no timestamps, no formatting)
-- **Content**: `transcript_only_text` field from API response
+**Transcript Files** (`~/.transcriptor/transcripts/{videoId}_{formattedTitle}.md`):
+- **Naming**: Video ID + underscore + formatted title (FR-2.5, TR-23)
+- **Format**: Metadata header + plain text transcript (FR-11)
+- **Content**:
+  - Metadata section: Channel, Title, Youtube ID, URL (TR-27)
+  - Blank line separator
+  - Transcript text: `transcript_only_text` field from API response
 - **Encoding**: UTF-8
 - **Size limit**: 10MB maximum per TR specifications
 
 **Registry File** (`~/.transcriptor/data.json`):
 - **Format**: JSON with 2-space indentation
-- **Schema**: `{videoId: {date_added, links}}`
+- **Schema**: `{videoId: {date_added, channel, title, links}}` (FR-3.2, TR-24)
 - **Write Strategy**: Atomic write (temp file + rename, per TR-8)
 - **Validation**: Structure validated on load, corrupted file regenerated
 
-**Project-Local Links** (`./transcripts/{videoId}.md`):
+**Project-Local Links** (`./transcripts/{videoId}_{formattedTitle}.md`):
 - **Type**: Symbolic links (symlinks)
 - **Target**: Points to central storage transcript
+- **Naming**: Same as source file (video ID + formatted title)
 - **Purpose**: Project-specific access without file duplication
 - **Creation**: Automatic on transcript processing
 - **Tracking**: All link paths stored in registry entry
@@ -513,9 +596,9 @@ graph TD
 ### Services Layer
 
 **TranscriptService** (`src/services/TranscriptService.js`):
-- Interface: `processBatch(urls)`, `processVideo(videoId, url)`
-- Responsibilities: Orchestrate transcript workflow, cache management, statistics
-- Dependencies: StorageService, APIClient, LinkManager
+- Interface: `processBatch(urls)`, `processVideo(videoId, url)`, `_fetchMetadataAndTranscript(videoId, url)`
+- Responsibilities: Orchestrate transcript and metadata workflow, parallel fetching, cache management, statistics
+- Dependencies: StorageService, APIClient, MetadataService, LinkManager
 
 **StorageService** (`src/services/StorageService.js`):
 - Interface: `initialize()`, `loadRegistry()`, `saveRegistry()`, `saveTranscript()`, `loadTranscript()`
@@ -527,9 +610,14 @@ graph TD
 - Responsibilities: HTTP communication, error handling, retry logic
 - Dependencies: axios, ErrorHandler, URLValidator
 
+**MetadataService** (`src/services/MetadataService.js`):
+- Interface: `fetchVideoMetadata(videoId)`, `formatTitle(title)`, `buildShortUrl(videoId)`, `buildMetadataHeader(metadata, videoId)`
+- Responsibilities: Fetch metadata from YouTube oEmbed API, title formatting, URL building, header generation
+- Dependencies: axios
+
 **LinkManager** (`src/services/LinkManager.js`):
-- Interface: `createLink(videoId)`, `removeAllLinks(videoId)`
-- Responsibilities: Symbolic link creation, link tracking, cleanup
+- Interface: `createLink(videoId, formattedTitle)`, `removeAllLinks(videoId)`
+- Responsibilities: Symbolic link creation with formatted filenames, link tracking, cleanup
 - Dependencies: fs-extra, StorageService, PathResolver
 
 **MaintenanceService** (`src/services/MaintenanceService.js`):
@@ -561,8 +649,18 @@ graph TD
 
 **StatisticsCalculator** (`src/utils/StatisticsCalculator.js`):
 - Interface: `calculate(registry, transcriptsPath)`
-- Responsibilities: Calculate metrics (count, size, date range)
+- Responsibilities: Calculate metrics (count, size, date range), display metadata (channel, title)
 - Dependencies: fs-extra
+
+**TitleFormatter** (`src/utils/titleFormatter.js`):
+- Interface: `formatTitle(title)`, `sanitizeForFilename(title)`
+- Responsibilities: Title sanitization for filesystem, lowercase conversion, space replacement
+- Dependencies: None
+
+**URLShortener** (`src/utils/urlShortener.js`):
+- Interface: `buildShortUrl(videoId)`
+- Responsibilities: Generate standardized youtu.be URLs
+- Dependencies: None
 
 **ErrorHandler** (`src/utils/ErrorHandler.js`):
 - Interface: `transformHttpError()`, `isRetryableError()`
@@ -583,6 +681,8 @@ graph TD
 {
   [videoId: string]: {
     date_added: string,  // YYYY-MM-DD format
+    channel: string,     // Channel/author name
+    title: string,       // Original video title
     links: string[]      // Absolute paths to symbolic links
   }
 }
@@ -591,15 +691,19 @@ graph TD
 {
   "dQw4w9WgXcQ": {
     "date_added": "2025-11-19",
+    "channel": "JavaScript Mastery",
+    "title": "How to Build REST APIs - Complete Tutorial",
     "links": [
-      "/Users/developer/project1/transcripts/dQw4w9WgXcQ.md",
-      "/Users/developer/project2/transcripts/dQw4w9WgXcQ.md"
+      "/Users/developer/project1/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md",
+      "/Users/developer/project2/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"
     ]
   },
   "jNQXAC9IVRw": {
     "date_added": "2025-11-18",
+    "channel": "Tech with Tim",
+    "title": "Python Tutorial for Beginners",
     "links": [
-      "/Users/developer/project1/transcripts/jNQXAC9IVRw.md"
+      "/Users/developer/project1/transcripts/jNQXAC9IVRw_python_tutorial_for_beginners.md"
     ]
   }
 }
@@ -608,27 +712,42 @@ graph TD
 **Field Descriptions**:
 - `videoId` (key): 11-character YouTube video identifier
 - `date_added`: ISO date (YYYY-MM-DD) when transcript first acquired
+- `channel`: Channel name from YouTube metadata (or "Unknown Channel")
+- `title`: Original video title from YouTube metadata (or "Unknown Title")
 - `links`: Array of absolute paths to symbolic links in projects
 
 **Validation Rules**:
-- Only allowed keys: `date_added`, `links`
+- Only allowed keys: `date_added`, `channel`, `title`, `links` (FR-3.2)
 - `date_added` must match YYYY-MM-DD format
+- `channel` must be non-empty string
+- `title` must be non-empty string
 - `links` must be an array (can be empty)
 - All link paths should be absolute
 
 ### Transcript File Format
 
 ```markdown
-[Plain text content from transcript_only_text field]
+Channel: JavaScript Mastery
+Title: How to Build REST APIs - Complete Tutorial
+Youtube ID: dQw4w9WgXcQ
+URL: https://youtu.be/dQw4w9WgXcQ
 
-Example content:
 Hello and welcome to this video tutorial. Today we're going to learn about
 JavaScript promises and async await patterns. Let's start with the basics...
 ```
 
+**Structure** (FR-11):
+- **Section 1**: Metadata header (4 lines)
+  - Channel: Original channel/author name
+  - Title: Original unmodified video title
+  - Youtube ID: Video identifier
+  - URL: Standardized short URL (youtu.be format)
+- **Section 2**: Blank line separator
+- **Section 3**: Transcript text (plain text from `transcript_only_text`)
+
 **Characteristics**:
-- No frontmatter or metadata
-- No timestamps or speaker labels
+- Metadata header at top (FR-11.1)
+- No timestamps or speaker labels in transcript
 - Plain text without markdown formatting
 - UTF-8 encoding
 - Line breaks preserved from API response
@@ -730,6 +849,7 @@ URLs are processed one at a time rather than concurrently:
 - Transcript Workflow: `src/services/TranscriptService.js`
 - Storage Operations: `src/services/StorageService.js`
 - API Integration: `src/services/APIClient.js`
+- Metadata Operations: `src/services/MetadataService.js`
 - Link Management: `src/services/LinkManager.js`
 - Integrity Checks: `src/services/MaintenanceService.js`
 
@@ -739,6 +859,8 @@ URLs are processed one at a time rather than concurrently:
 - Validation: `src/utils/validators.js`
 - Error Handling: `src/utils/ErrorHandler.js`
 - Console Output: `src/utils/ConsoleFormatter.js`
+- Title Formatting: `src/utils/titleFormatter.js`
+- URL Shortening: `src/utils/urlShortener.js`
 
 ### Configuration
 - API Constants: `src/constants/APIClientConstants.js`
@@ -755,9 +877,10 @@ Commands
   └─→ clean.js → StorageService, MaintenanceService
 
 Services
-  ├─→ TranscriptService → StorageService, APIClient, LinkManager, URLParser, Validators
+  ├─→ TranscriptService → StorageService, APIClient, MetadataService, LinkManager, URLParser, Validators
   ├─→ StorageService → PathResolver, Validators
   ├─→ APIClient → ErrorHandler, ValidationHelpers, URLValidator
+  ├─→ MetadataService → TitleFormatter, URLShortener
   ├─→ LinkManager → StorageService, PathResolver
   └─→ MaintenanceService → StorageService, LinkManager
 
@@ -766,7 +889,9 @@ Utilities
   ├─→ URLParser → YouTubeConstants
   ├─→ Validators → (no dependencies)
   ├─→ ErrorHandler → APIClientConstants
-  └─→ ConsoleFormatter → (no dependencies)
+  ├─→ ConsoleFormatter → (no dependencies)
+  ├─→ TitleFormatter → (no dependencies)
+  └─→ URLShortener → (no dependencies)
 ```
 
 ## Performance Characteristics
@@ -778,7 +903,8 @@ Utilities
 **File I/O**: Minimal reads (registry once, transcripts on cache hit only)
 
 **Bottlenecks**:
-- API fetch time (30s timeout per video)
+- API fetch time (30s timeout per transcript, 15s for metadata)
+- Parallel fetching reduces total wait time per video
 - Large batches (100+ videos) hit rate limit
 - Registry write per video (can batch in future optimization)
 
@@ -786,8 +912,9 @@ Utilities
 
 **Current Design**:
 - Handles up to 1000 videos efficiently
-- Registry file size grows linearly (approximately 100 bytes per entry)
+- Registry file size grows linearly (approximately 200 bytes per entry with metadata)
 - Sequential processing limits throughput to ~100 videos/minute
+- Parallel metadata fetching saves 15-30 seconds per video
 
 **Optimization Opportunities** (future):
 - Batch registry updates (write once per batch instead of per video)
@@ -804,7 +931,9 @@ Utilities
 
 **Path Validation**:
 - Video IDs sanitized (alphanumeric + dash only)
-- Path traversal prevented (validates video ID format)
+- Titles sanitized for filesystem (alphanumeric, underscore, dash only)
+- Path traversal prevented (validates video ID and title format)
+- Filename length limits enforced (255 characters)
 - Absolute paths used throughout
 
 **Error Message Sanitization**:

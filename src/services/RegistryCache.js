@@ -92,10 +92,13 @@ class RegistryCache {
     logger.verbose('Cache miss: loading metadata from disk');
     const registry = await loadRegistryFn();
 
-    this.metadata = Object.keys(registry).map(id => ({
+    this.metadata = Object.keys(registry).map((id) => ({
       id,
       date: registry[id].date_added,
-      linkCount: registry[id].links.length
+      channel: registry[id].channel,
+      title: registry[id].title,
+      links: registry[id].links,
+      linkCount: registry[id].links.length,
     }));
 
     this.dirty = false;

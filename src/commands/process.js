@@ -3,6 +3,7 @@ const path = require('path');
 const ConsoleFormatter = require('../utils/ConsoleFormatter');
 const StorageService = require('../services/StorageService');
 const APIClient = require('../services/APIClient');
+const MetadataService = require('../services/MetadataService');
 const TranscriptService = require('../services/TranscriptService');
 const LinkManager = require('../services/LinkManager');
 const MaintenanceService = require('../services/MaintenanceService');
@@ -46,6 +47,8 @@ async function processCommand() {
     const apiClient = new APIClient(apiKey);
     await apiClient.initialize();
 
+    const metadataService = new MetadataService();
+
     // Auto-maintenance (implements FR-7.1, TR-14)
     // Initialize LinkManager (required by MaintenanceService)
     const linkManager = new LinkManager(storageService, pathResolver);
@@ -87,7 +90,12 @@ async function processCommand() {
       console.log('[Maintenance] Registry validation passed\n');
     }
 
-    const transcriptService = new TranscriptService(storageService, apiClient, pathResolver);
+    const transcriptService = new TranscriptService(
+      storageService,
+      apiClient,
+      metadataService,
+      pathResolver
+    );
 
     // Step 1: Validate file exists
     const inputFile = await validateInputFile();

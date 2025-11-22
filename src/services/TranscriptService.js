@@ -14,7 +14,7 @@ const {
  * Transcript Service
  *
  * Orchestrates transcript acquisition with cache-first strategy
- * Implements FR-2.2, FR-2.3, FR-3.2, TR-6, TR-7, BR-1
+ * Implements FR-2.2, FR-2.3, FR-3.2, TR-6, TR-7, TR-25, BR-1
  *
  * @class TranscriptService
  */
@@ -22,18 +22,29 @@ class TranscriptService {
   /**
    * @param {StorageService} storageService - Storage layer dependency
    * @param {APIClient} apiClient - API integration dependency
+   * @param {MetadataService} metadataService - Metadata collection dependency
    * @param {Object} pathResolver - Path resolution utility
    */
-  constructor(storageService, apiClient, pathResolver) {
+  constructor(storageService, apiClient, metadataService, pathResolver) {
     // Validate dependencies
-    if (!storageService || !apiClient || !pathResolver) {
+    if (!storageService || !apiClient || !metadataService || !pathResolver) {
       throw new Error(
-        'TranscriptService requires StorageService, APIClient, and PathResolver dependencies'
+        'TranscriptService requires StorageService, APIClient, MetadataService, and PathResolver dependencies'
       );
+    }
+
+    // CRITICAL: Validate MetadataService instance has required methods
+    if (typeof metadataService.fetchVideoMetadata !== 'function') {
+      throw new Error('MetadataService must implement fetchVideoMetadata method');
+    }
+
+    if (typeof metadataService.formatTitle !== 'function') {
+      throw new Error('MetadataService must implement formatTitle method');
     }
 
     this.storage = storageService;
     this.api = apiClient;
+    this.metadata = metadataService; // NEW DEPENDENCY
     this.linkManager = new LinkManager(storageService, pathResolver);
 
     // Statistics tracking
@@ -42,6 +53,9 @@ class TranscriptService {
       cacheMisses: 0,
       linksCreated: 0,
       linksFailed: 0,
+      metadataFailed: 0, // NEW STAT
+      metadataFetchDuration: 0, // NEW: Track metadata fetch time separately
+      transcriptFetchDuration: 0, // NEW: Track transcript fetch time
       startTime: null,
     };
   }
@@ -190,14 +204,15 @@ class TranscriptService {
   }
 
   /**
-   * Register transcript in data.json (implements FR-3.2, TR-16)
+   * Register transcript in data.json (implements FR-3.2, TR-16, TR-24)
    * Creates or updates registry entry with metadata
    *
    * @param {string} videoId - YouTube video identifier
+   * @param {Object} metadata - {channel, title} (optional for backward compatibility)
    * @returns {Promise<void>}
    * @throws {Error} If registry update fails
    */
-  async registerTranscript(videoId) {
+  async registerTranscript(videoId, metadata) {
     console.log(LOG_MESSAGES.TRANSCRIPT_REGISTERING(videoId));
 
     try {
@@ -210,15 +225,25 @@ class TranscriptService {
 
       // Create or update entry
       if (!registry[videoId]) {
-        // New entry - initialize with date and empty links array
+        // New entry - initialize with date, metadata, and empty links array
         registry[videoId] = {
           date_added: dateAdded,
           links: [],
         };
+
+        // Add metadata if provided
+        if (metadata && metadata.channel && metadata.title) {
+          registry[videoId].channel = metadata.channel;
+          registry[videoId].title = metadata.title;
+        }
+
         console.log(LOG_MESSAGES.TRANSCRIPT_ENTRY_CREATED(videoId));
       } else {
-        // Existing entry - preserve date_added and links
-        // No action needed for cache hit scenario
+        // Existing entry - update metadata if provided (metadata may change over time)
+        if (metadata && metadata.channel && metadata.title) {
+          registry[videoId].channel = metadata.channel;
+          registry[videoId].title = metadata.title;
+        }
         console.log(LOG_MESSAGES.TRANSCRIPT_ENTRY_EXISTS(videoId));
       }
 
@@ -275,7 +300,63 @@ class TranscriptService {
   }
 
   /**
-   * Retrieve transcript from cache or API
+   * Fetch transcript and metadata in parallel
+   * CRITICAL ENHANCEMENTS: Performance tracking, error isolation, timeout handling
+   * Implements TR-25 parallel fetch workflow
+   *
+   * @param {string} videoId - YouTube video ID
+   * @param {string} videoUrl - Full YouTube URL
+   * @returns {Promise<{transcript: string, metadata: {channel, title}}>}
+   */
+  async _fetchTranscriptAndMetadata(videoId, videoUrl) {
+    try {
+      // CRITICAL: Track fetch duration for both operations
+      const transcriptStartTime = Date.now();
+      const metadataStartTime = Date.now();
+
+      // Execute both fetches in parallel with individual timing
+      const [transcriptResult, metadataResult] = await Promise.all([
+        this.api.fetchTranscript(videoUrl).then((transcript) => {
+          this.stats.transcriptFetchDuration += Date.now() - transcriptStartTime;
+          return transcript;
+        }),
+        this.metadata
+          .fetchVideoMetadata(videoId)
+          .then((metadata) => {
+            this.stats.metadataFetchDuration += Date.now() - metadataStartTime;
+            return metadata;
+          })
+          .catch((error) => {
+            // CRITICAL: Metadata fetch failures should never propagate
+            // Already handled internally, but defensive catch
+            this.stats.metadataFailed++;
+            console.warn(`[TranscriptService] Metadata fetch error caught: ${error.message}`);
+            return { channel: 'Unknown Channel', title: 'Unknown Title' };
+          }),
+      ]);
+
+      // CRITICAL: Track metadata fallback usage
+      if (
+        metadataResult.channel === 'Unknown Channel' ||
+        metadataResult.title === 'Unknown Title'
+      ) {
+        this.stats.metadataFailed++;
+      }
+
+      return { transcript: transcriptResult, metadata: metadataResult };
+    } catch (error) {
+      // If transcript fetch fails, propagate error (fatal)
+      // This catch only triggers if transcript API fails
+      console.error(
+        `[TranscriptService] Transcript fetch failed for ${videoId}: ${error.message}`
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Retrieve transcript from cache or API with metadata
+   * Implements FR-2.2 cache priority, TR-25 parallel fetch
    * @private
    */
   async _getOrFetchTranscript(videoId, videoUrl) {
@@ -292,7 +373,10 @@ class TranscriptService {
           // Fall through to API fetch
         } else {
           console.log(LOG_MESSAGES.CACHE_HIT(videoId));
-          return { transcript, wasCached: true };
+          // For cached transcripts, extract metadata from file header if present
+          // Otherwise use fallback values (backward compatibility)
+          const metadata = this._extractMetadataFromTranscript(transcript);
+          return { transcript, metadata, wasCached: true };
         }
       } catch (error) {
         // Cache read failure - log and refetch from API
@@ -305,21 +389,44 @@ class TranscriptService {
     // - Not cached (isCached = false)
     // - Cache read failed (caught exception)
     // - Cached file empty (validation failed)
-    const transcript = await this.api.fetchTranscript(videoUrl);
-    await this.storage.saveTranscript(videoId, transcript);
-    await this.registerTranscript(videoId);
+    const { transcript, metadata } = await this._fetchTranscriptAndMetadata(videoId, videoUrl);
+    await this.storage.saveTranscript(videoId, transcript, metadata);
+    await this.registerTranscript(videoId, metadata);
     console.log(LOG_MESSAGES.FETCH_SAVED(videoId));
 
-    return { transcript, wasCached: false };
+    return { transcript, metadata, wasCached: false };
+  }
+
+  /**
+   * Extract metadata from transcript file header
+   * @private
+   * @param {string} transcript - Transcript content
+   * @returns {Object} Metadata {channel, title}
+   */
+  _extractMetadataFromTranscript(transcript) {
+    const lines = transcript.split('\n');
+    let channel = 'Unknown Channel';
+    let title = 'Unknown Title';
+
+    for (const line of lines.slice(0, 10)) {
+      // Check first 10 lines
+      if (line.startsWith('Channel: ')) {
+        channel = line.substring(9).trim();
+      } else if (line.startsWith('Title: ')) {
+        title = line.substring(7).trim();
+      }
+    }
+
+    return { channel, title };
   }
 
   /**
    * Process video: fetch transcript and create symbolic link
-   * Implements FR-2, FR-4, TR-7 processing workflow
+   * Implements FR-2, FR-4, TR-7, TR-25 processing workflow with metadata
    *
    * Step 1: Cache check (FR-2.2, BR-1)
-   * Step 2: Fetch from API if needed (FR-2.1)
-   * Step 3: Persist immediately (FR-2.3, FR-9.1)
+   * Step 2: Fetch from API if needed (FR-2.1, FR-2.2 parallel fetch)
+   * Step 3: Persist immediately (FR-2.3, FR-9.1, FR-11 with metadata header)
    * Step 4: Create link (FR-4)
    *
    * @param {string} videoId - YouTube video identifier (11 chars)
@@ -333,10 +440,10 @@ class TranscriptService {
     validators.assertValidVideoId(videoId);
     const absoluteProjectDir = path.resolve(projectDir);
 
-    // Step 1-3: Get or fetch transcript
-    const { wasCached } = await this._getOrFetchTranscript(videoId, videoUrl);
+    // Step 1-3: Get or fetch transcript with metadata
+    const { wasCached, metadata } = await this._getOrFetchTranscript(videoId, videoUrl);
 
-    // Step 4: Create link
+    // Step 4: Create link (metadata used for filename by LinkManager)
     const linkResult = await this.linkManager.createLink(videoId, absoluteProjectDir);
     console.log(LOG_MESSAGES.LINK_CREATED(linkResult.path));
     this.stats.linksCreated++;
@@ -348,6 +455,7 @@ class TranscriptService {
       linked: linkResult.success,
       linkPath: linkResult.path,
       replaced: linkResult.replaced,
+      metadata: metadata,
     });
   }
 

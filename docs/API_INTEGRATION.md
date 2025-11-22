@@ -690,12 +690,307 @@ if (isNaN(retryAfter) || retryAfter < 0 || retryAfter > 60) {
 }
 ```
 
+## YouTube oEmbed API Integration
+
+The system integrates with YouTube's public oEmbed API to fetch video metadata (title and channel name) without authentication. This metadata enhances transcript files with contextual information.
+
+### Endpoint Specification
+
+**Base URL**: `https://www.youtube.com/oembed`
+**Method**: `GET`
+**Authentication**: None required (public API)
+**Timeout**: 15 seconds
+
+### Request Schema
+
+The API accepts query parameters in the URL:
+
+```
+GET https://www.youtube.com/oembed?url={encoded_youtube_url}&format=json
+```
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `url` | string | Yes | URL-encoded full YouTube video URL (e.g., `https://youtu.be/dQw4w9WgXcQ`) |
+| `format` | string | Yes | Response format - always `json` |
+
+**Example Request:**
+```
+https://www.youtube.com/oembed?url=https%3A%2F%2Fyoutu.be%2FdQw4w9WgXcQ&format=json
+```
+
+### Response Schema
+
+Successful responses return JSON with video metadata:
+
+```json
+{
+  "title": "How to Build REST APIs - Complete Tutorial",
+  "author_name": "JavaScript Mastery",
+  "author_url": "https://www.youtube.com/@javascriptmastery",
+  "type": "video",
+  "height": 113,
+  "width": 200,
+  "version": "1.0",
+  "provider_name": "YouTube",
+  "provider_url": "https://www.youtube.com/",
+  "thumbnail_height": 360,
+  "thumbnail_width": 480,
+  "thumbnail_url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+  "html": "<iframe width=\"200\" height=\"113\" src=\"https://www.youtube.com/embed/dQw4w9WgXcQ?feature=oembed\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" referrerpolicy=\"strict-origin-when-cross-origin\" allowfullscreen title=\"Video Title\"></iframe>"
+}
+```
+
+**Fields Used by Transcriptor:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | string | Original video title (preserved as-is for display) |
+| `author_name` | string | Channel name/creator name |
+
+**Response Characteristics:**
+- Encoding: UTF-8
+- Format: JSON
+- Unused fields: Ignored (only title and author_name extracted)
+
+### Sample Request with Axios
+
+```javascript
+const axios = require('axios');
+
+async function fetchMetadata(videoId) {
+  const videoUrl = `https://youtu.be/${videoId}`;
+  const encodedUrl = encodeURIComponent(videoUrl);
+
+  const response = await axios.get(
+    `https://www.youtube.com/oembed?url=${encodedUrl}&format=json`,
+    {
+      timeout: 15000 // 15 seconds
+    }
+  );
+
+  return {
+    title: response.data.title,
+    channel: response.data.author_name
+  };
+}
+```
+
+### Sample Request with cURL
+
+For testing or debugging purposes:
+
+```bash
+curl -X GET "https://www.youtube.com/oembed?url=https%3A%2F%2Fyoutu.be%2FdQw4w9WgXcQ&format=json" \
+  --max-time 15
+```
+
+### Error Handling
+
+The metadata fetch is **non-fatal** - if it fails, the system uses fallback values and continues processing the transcript.
+
+**Error Code Matrix:**
+
+| HTTP Status | Error Type | Behavior | Fallback Values |
+|-------------|------------|----------|-----------------|
+| 404 Not Found | `VIDEO_NOT_FOUND` | Use fallback, log warning, continue | channel: "Unknown Channel"<br>title: "Unknown Title" |
+| 400 Bad Request | `INVALID_REQUEST` | Use fallback, log warning, continue | channel: "Unknown Channel"<br>title: "Unknown Title" |
+| 500 Server Error | `SERVER_ERROR` | Use fallback, log warning, continue | channel: "Unknown Channel"<br>title: "Unknown Title" |
+| Network timeout | `TIMEOUT` | Use fallback, log warning, continue | channel: "Unknown Channel"<br>title: "Unknown Title" |
+
+**Key Difference from Transcript API**: Metadata failures are **non-fatal**. Unlike transcript fetch failures which skip the URL entirely, metadata failures allow processing to continue with placeholder values.
+
+### Error Transformation
+
+**Implementation Reference**: `src/services/MetadataService.js` - `fetchVideoMetadata()` method
+
+**Error Handling Examples:**
+
+```javascript
+// 404 Not Found (video private/deleted)
+{
+  type: 'VIDEO_NOT_FOUND',
+  message: 'Video metadata unavailable (404). Using fallback values.',
+  fatal: false,
+  fallback: {
+    channel: 'Unknown Channel',
+    title: 'Unknown Title'
+  }
+}
+
+// 500 Server Error
+{
+  type: 'SERVER_ERROR',
+  message: 'YouTube oEmbed API error (500). Using fallback values.',
+  fatal: false,
+  fallback: {
+    channel: 'Unknown Channel',
+    title: 'Unknown Title'
+  }
+}
+
+// Network Timeout
+{
+  type: 'TIMEOUT',
+  message: 'Metadata fetch timeout after 15000ms. Using fallback values.',
+  fatal: false,
+  fallback: {
+    channel: 'Unknown Channel',
+    title: 'Unknown Title'
+  }
+}
+```
+
+### Log Message Examples
+
+```
+[MetadataService] Fetching metadata for video: dQw4w9WgXcQ
+[MetadataService] Metadata fetched: "How to Build REST APIs" by "JavaScript Mastery"
+
+# Error scenarios:
+[MetadataService] Warning: Video not found (404) - Using fallback values
+[MetadataService] Warning: oEmbed API timeout after 15000ms - Using fallback values
+[MetadataService] Warning: oEmbed server error (500) - Using fallback values
+```
+
+### No Retry Strategy
+
+Unlike the Scrape Creators API, the oEmbed API does **not** implement retry logic:
+
+**Rationale**:
+- Metadata is non-critical (fallback values are acceptable)
+- Reduces processing time for failed metadata fetches
+- Simplifies error handling (immediate fallback)
+- Prevents unnecessary API load
+
+**Behavior on Error**: Single attempt → immediate fallback
+
+### Parallel Fetching
+
+Metadata and transcript are fetched **concurrently** using `Promise.all()` to minimize total processing time:
+
+**Implementation Reference**: `src/services/TranscriptService.js` - `processVideo()` method
+
+```javascript
+async function processVideo(videoId, url) {
+  // Parallel fetch for new videos
+  const [transcript, metadata] = await Promise.all([
+    apiClient.fetchTranscript(url),
+    metadataService.fetchVideoMetadata(videoId)
+  ]);
+
+  // Both complete (or fail) before continuing
+  return { transcript, metadata };
+}
+```
+
+**Benefits**:
+- Reduced processing time: 15-30 second savings per video
+- API calls don't block each other
+- Independent error handling (one can fail without affecting the other)
+
+**Error Isolation**: If metadata fetch fails, transcript fetch continues unaffected
+
+### Integration with File Naming
+
+The fetched title is used to generate descriptive filenames:
+
+**Title Formatting Utility** (`src/utils/titleFormatter.js`):
+- Input: `"How to Build REST APIs - Complete Tutorial"`
+- Process: Lowercase → replace spaces → sanitize → truncate
+- Output: `"how_to_build_rest_apis_complete_tutorial"`
+- Filename: `"dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"`
+
+**Fallback Filename**: If title is "Unknown Title", format as `"{videoId}_unknown_title.md"`
+
+### Integration with File Content
+
+The fetched metadata populates a header section in each transcript file:
+
+**Metadata Header Template**:
+```
+Channel: JavaScript Mastery
+Title: How to Build REST APIs - Complete Tutorial
+Youtube ID: dQw4w9WgXcQ
+URL: https://youtu.be/dQw4w9WgXcQ
+
+[Transcript content follows...]
+```
+
+**Field Descriptions**:
+- `Channel`: From `author_name` field (or "Unknown Channel")
+- `Title`: From `title` field - **original unmodified** (or "Unknown Title")
+- `Youtube ID`: Video identifier
+- `URL`: Standardized short URL format
+
+### Testing Integration
+
+**Testing Scenarios:**
+
+**Happy Path:**
+1. Valid video ID → Metadata retrieved successfully
+2. Verify `title` and `author_name` fields extracted correctly
+3. Check metadata appears in file header
+4. Verify formatted title used in filename
+
+**Error Scenarios:**
+
+1. **Private/Deleted Video (404)**:
+   - Use video that's been deleted or made private
+   - Expect: Fallback values used, warning logged
+   - Verify: Transcript processing continues
+
+2. **Invalid Video ID (400)**:
+   - Use malformed video ID
+   - Expect: Fallback values used, warning logged
+   - Verify: File created with fallback metadata
+
+3. **Network Timeout**:
+   - Simulate slow network (testing tool required)
+   - Expect: Timeout after 15s, fallback values used
+   - Verify: Transcript processing not delayed
+
+4. **Server Error (500)**:
+   - Mock server error (requires API testing tool)
+   - Expect: Fallback values used, warning logged
+   - Verify: Processing continues
+
+### Mock API Responses
+
+For development and testing:
+
+```javascript
+// Example using nock for testing
+const nock = require('nock');
+
+// Mock successful response
+nock('https://www.youtube.com')
+  .get('/oembed')
+  .query({ url: 'https://youtu.be/dQw4w9WgXcQ', format: 'json' })
+  .reply(200, {
+    title: 'Test Video Title',
+    author_name: 'Test Channel',
+    type: 'video',
+    provider_name: 'YouTube'
+  });
+
+// Mock 404 error
+nock('https://www.youtube.com')
+  .get('/oembed')
+  .query({ url: 'https://youtu.be/invalidID', format: 'json' })
+  .reply(404, { error: 'Not Found' });
+```
+
 ## References
 
-- **Implementation**: `src/services/APIClient.js`
+- **Implementation**: `src/services/APIClient.js`, `src/services/MetadataService.js`
 - **Constants**: `src/constants/APIClientConstants.js`
 - **Error Handling**: `src/utils/ErrorHandler.js`
 - **URL Validation**: `src/utils/URLValidator.js`
-- **Functional Requirements**: FR-2.1 (Transcript Acquisition)
-- **Technical Requirements**: TR-11 (API Key Management), TR-12 (API Failures)
+- **Title Formatting**: `src/utils/titleFormatter.js`
+- **Functional Requirements**: FR-2.1 (Transcript Acquisition), FR-2.2 (Metadata Acquisition), FR-2.5 (Title Formatting), FR-11 (File Structure)
+- **Technical Requirements**: TR-11 (API Key Management), TR-12 (API Failures), TR-20 (Metadata Acquisition), TR-21 (Title Formatting), TR-29 (Metadata Errors)
 - **Scrape Creators API Documentation**: Contact vendor for official docs
+- **YouTube oEmbed API Documentation**: https://oembed.com/providers/youtube

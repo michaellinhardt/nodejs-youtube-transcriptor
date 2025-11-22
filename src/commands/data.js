@@ -81,11 +81,11 @@ function handleInitializationError(error) {
 
 /**
  * Display statistics in human-readable format
- * Implements TR-3 output specification
+ * Implements TR-3 output specification with metadata support
  * Consistent with process.js output style
  * @param {Object} stats - Statistics object from calculateStatistics
  */
-function displayStatistics(stats) {
+async function displayStatistics(stats) {
   // Guard: Validate stats object structure (BUG FIX)
   if (!stats || typeof stats !== 'object') {
     logger.error('Invalid statistics object provided to display');
@@ -118,6 +118,19 @@ function displayStatistics(stats) {
   }
 
   logger.info(''); // Trailing blank line for readability
+
+  // Display per-entry metadata if available
+  if (stats.entries && Array.isArray(stats.entries) && stats.entries.length > 0) {
+    logger.info('--- Per Entry Details ---\n');
+    for (const entry of stats.entries) {
+      logger.info(`Video ID: ${entry.videoId}`);
+      logger.info(`  Channel: ${entry.channel || 'N/A'}`);
+      logger.info(`  Title: ${entry.title || 'N/A'}`);
+      logger.info(`  Date Added: ${entry.date_added || 'N/A'}`);
+      logger.info(`  Links: ${entry.links ? entry.links.length : 0}`);
+      logger.info('');
+    }
+  }
 }
 
 module.exports = dataCommand;

@@ -4,15 +4,17 @@
 
 This document provides an end-to-end walkthrough of how data flows through the Transcriptor system, from YouTube URLs in a markdown file to locally-accessible transcript files via symbolic links. Understanding this flow is critical for maintaining the codebase, debugging issues, and extending functionality.
 
-The complete data flow consists of seven distinct stages:
+The complete data flow consists of nine distinct stages:
 
 1. **YouTube URL Input** - Reading and parsing URLs from youtube.md
 2. **Cache Check** - Determining if transcripts already exist
-3. **API Fetch** - Retrieving transcripts from external service (cache miss only)
-4. **Transcript Storage** - Persisting content to central repository
-5. **Registry Update** - Recording metadata in data.json
-6. **Link Creation** - Creating symbolic links in project directory
-7. **Batch Processing & Summary** - Sequential processing with error handling
+3. **Parallel API Fetch** - Retrieving transcripts and metadata from external services (cache miss only)
+4. **Metadata Processing** - Formatting title and building metadata header
+5. **Transcript Storage** - Persisting content with metadata header to central repository
+6. **Registry Update** - Recording video metadata in data.json
+7. **Link Creation** - Creating symbolic links in project directory with formatted filenames
+8. **Batch Processing & Summary** - Sequential processing with error handling
+9. **Statistics Display** - Summary with metadata-enhanced information
 
 Each stage implements specific functional and technical requirements while maintaining crash resilience through atomic operations.
 
@@ -173,15 +175,19 @@ async function loadRegistry() {
 {
   "dQw4w9WgXcQ": {
     "date_added": "2025-11-19",
+    "channel": "JavaScript Mastery",
+    "title": "How to Build REST APIs - Complete Tutorial",
     "links": [
-      "/Users/developer/project1/transcripts/dQw4w9WgXcQ.md",
-      "/Users/developer/project2/transcripts/dQw4w9WgXcQ.md"
+      "/Users/developer/project1/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md",
+      "/Users/developer/project2/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"
     ]
   },
   "jNQXAC9IVRw": {
     "date_added": "2025-11-18",
+    "channel": "Tech with Tim",
+    "title": "Python Tutorial for Beginners",
     "links": [
-      "/Users/developer/project1/transcripts/jNQXAC9IVRw.md"
+      "/Users/developer/project1/transcripts/jNQXAC9IVRw_python_tutorial_for_beginners.md"
     ]
   }
 }
@@ -199,7 +205,9 @@ const entryExists = registry.hasOwnProperty(videoId);
 
 **Check 2: Transcript File Exists**
 ```javascript
-const transcriptPath = `~/.transcriptor/transcripts/${videoId}.md`;
+// When checking cache, we look for any file matching the video ID pattern
+// since the formatted title portion may vary
+const transcriptPattern = `~/.transcriptor/transcripts/${videoId}_*.md`;
 const fileExists = await fs.pathExists(transcriptPath);
 ```
 
@@ -257,7 +265,39 @@ this.stats = {
 Summary: 5 processed (3 from cache, 2 newly fetched)
 ```
 
-## Stage 3: API Fetch (Cache Miss Only)
+## Stage 3: Parallel API Fetch (Cache Miss Only)
+
+When a cache miss occurs, the system fetches both the transcript and metadata in parallel using `Promise.all()`. This minimizes total processing time per video.
+
+### Parallel Execution Strategy
+
+**Implementation**: `src/services/TranscriptService.js` - `processVideo()` method
+
+```javascript
+async function processVideo(videoId, url) {
+  // Check cache first
+  const isCached = await this._checkCache(videoId);
+  if (isCached) {
+    return this.storage.loadTranscript(videoId);
+  }
+
+  // Cache miss: Fetch transcript and metadata in parallel
+  const [transcript, metadata] = await Promise.all([
+    this.apiClient.fetchTranscript(url),
+    this.metadataService.fetchVideoMetadata(videoId)
+  ]);
+
+  // Both complete (or fail independently) before continuing
+  return { transcript, metadata };
+}
+```
+
+**Benefits**:
+- Reduced total wait time: ~15-30 seconds saved per video
+- Independent error handling: Metadata failure doesn't block transcript fetch
+- Better resource utilization: Both APIs called concurrently
+
+### Transcript Fetch (Scrape Creators API)
 
 When a cache miss occurs, the system fetches the transcript from the Scrape Creators API.
 
@@ -438,7 +478,275 @@ For errors:
 
 **Security Note**: API key is never logged. Request/response logging sanitizes sensitive data.
 
-## Stage 4: Transcript Storage
+### Metadata Fetch (YouTube oEmbed API)
+
+Concurrently with the transcript fetch, the system retrieves video metadata from YouTube's public oEmbed API.
+
+#### Request Construction
+
+**Endpoint**: `GET https://www.youtube.com/oembed`
+
+**Query Parameters**:
+```javascript
+{
+  url: encodeURIComponent(`https://youtu.be/${videoId}`),
+  format: 'json'
+}
+```
+
+**Configuration**:
+- Timeout: 15 seconds
+- Method: GET
+- Response Type: JSON
+- Authentication: None (public API)
+
+**Code Reference**: `src/services/MetadataService.js` - `fetchVideoMetadata()`
+
+#### Request Execution
+
+```javascript
+async function fetchVideoMetadata(videoId) {
+  const videoUrl = `https://youtu.be/${videoId}`;
+  const encodedUrl = encodeURIComponent(videoUrl);
+
+  const response = await axios.get(
+    `https://www.youtube.com/oembed?url=${encodedUrl}&format=json`,
+    { timeout: 15000 }
+  );
+
+  return {
+    channel: response.data.author_name,
+    title: response.data.title
+  };
+}
+```
+
+#### Response Parsing
+
+**Expected Response**:
+```json
+{
+  "title": "How to Build REST APIs - Complete Tutorial",
+  "author_name": "JavaScript Mastery",
+  "type": "video",
+  "provider_name": "YouTube"
+}
+```
+
+**Extraction**:
+```javascript
+const metadata = {
+  channel: response.data.author_name,
+  title: response.data.title
+};
+
+// Validate fields exist
+if (!metadata.channel || !metadata.title) {
+  // Use fallback values
+  metadata.channel = metadata.channel || 'Unknown Channel';
+  metadata.title = metadata.title || 'Unknown Title';
+}
+
+return metadata;
+```
+
+#### Error Handling (Non-Fatal)
+
+Unlike transcript fetch errors, metadata fetch failures are **non-fatal**. Processing continues with fallback values.
+
+**Error Handling Matrix**:
+
+| Status | Action | Fallback Values |
+|--------|--------|-----------------|
+| 404 Not Found | Log warning, use fallback, continue | channel: "Unknown Channel"<br>title: "Unknown Title" |
+| 400 Bad Request | Log warning, use fallback, continue | channel: "Unknown Channel"<br>title: "Unknown Title" |
+| 500 Server Error | Log warning, use fallback, continue | channel: "Unknown Channel"<br>title: "Unknown Title" |
+| Timeout (15s) | Log warning, use fallback, continue | channel: "Unknown Channel"<br>title: "Unknown Title" |
+
+**Error Handling Examples**:
+
+```javascript
+catch (error) {
+  if (error.response?.status === 404) {
+    console.warn(`[MetadataService] Video not found (404) for ${videoId} - Using fallback`);
+    return {
+      channel: 'Unknown Channel',
+      title: 'Unknown Title'
+    };
+  }
+
+  if (error.code === 'ETIMEDOUT') {
+    console.warn(`[MetadataService] Timeout after 15000ms for ${videoId} - Using fallback`);
+    return {
+      channel: 'Unknown Channel',
+      title: 'Unknown Title'
+    };
+  }
+
+  // For any other error, use fallback
+  console.warn(`[MetadataService] Error fetching metadata: ${error.message} - Using fallback`);
+  return {
+    channel: 'Unknown Channel',
+    title: 'Unknown Title'
+  };
+}
+```
+
+**No Retry Logic**: Unlike transcript API, metadata fetches do not retry on failure. Single attempt → immediate fallback.
+
+**Rationale**:
+- Metadata is supplementary (not critical for core functionality)
+- Fallback values ensure processing continues
+- Reduces processing time for failed requests
+- Prevents unnecessary API load
+
+#### Request/Response Logging
+
+```
+[MetadataService] Fetching metadata for video: dQw4w9WgXcQ
+[MetadataService] Metadata fetched: "How to Build REST APIs" by "JavaScript Mastery"
+
+# Error scenarios:
+[MetadataService] Warning: Video not found (404) - Using fallback values
+[MetadataService] Warning: Timeout after 15000ms - Using fallback values
+```
+
+## Stage 4: Metadata Processing
+
+After fetching metadata (or using fallback values), the system processes it for file operations.
+
+### Title Formatting
+
+The video title is sanitized for filesystem compatibility.
+
+**Code Reference**: `src/services/MetadataService.js` or `src/utils/titleFormatter.js` - `formatTitle()`
+
+**Algorithm**:
+1. Trim whitespace
+2. Convert to lowercase
+3. Replace spaces with underscores
+4. Remove invalid characters (keep only alphanumeric, underscore, dash)
+5. Collapse multiple underscores to single
+6. Remove leading/trailing underscores
+7. Truncate to 100 characters (filesystem safety)
+8. Handle empty result (use "untitled")
+
+**Implementation**:
+```javascript
+function formatTitle(title) {
+  if (!title || title.trim().length === 0) {
+    return 'untitled';
+  }
+
+  let formatted = title
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')              // Spaces to underscores
+    .replace(/[^a-z0-9_-]+/g, '_')     // Remove invalid chars
+    .replace(/_+/g, '_')               // Collapse underscores
+    .replace(/^_|_$/g, '');            // Trim underscores
+
+  // Truncate to 100 characters
+  if (formatted.length > 100) {
+    formatted = formatted.substring(0, 100);
+  }
+
+  // Fallback if empty after sanitization
+  if (formatted.length === 0) {
+    return 'untitled';
+  }
+
+  return formatted;
+}
+```
+
+**Examples**:
+```javascript
+Input: "How to Build REST APIs - Complete Tutorial"
+Output: "how_to_build_rest_apis_complete_tutorial"
+
+Input: "Python Tutorial #1 (Beginner)"
+Output: "python_tutorial_1_beginner"
+
+Input: "C++ Programming"
+Output: "c_programming"
+
+Input: "   Multiple    Spaces   "
+Output: "multiple_spaces"
+
+Input: "Unknown Title"
+Output: "unknown_title"
+```
+
+### Short URL Building
+
+The system generates a standardized short URL for the video.
+
+**Code Reference**: `src/utils/urlShortener.js` - `buildShortUrl()`
+
+**Template**: `https://youtu.be/{videoId}`
+
+**Implementation**:
+```javascript
+function buildShortUrl(videoId) {
+  // Validate video ID format
+  if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+    throw new Error(`Invalid video ID format: ${videoId}`);
+  }
+
+  return `https://youtu.be/${videoId}`;
+}
+```
+
+**Example**:
+```javascript
+Input: "dQw4w9WgXcQ"
+Output: "https://youtu.be/dQw4w9WgXcQ"
+```
+
+### Metadata Header Building
+
+The system constructs a metadata header for the transcript file.
+
+**Code Reference**: `src/services/MetadataService.js` - `buildMetadataHeader()`
+
+**Template**:
+```
+Channel: {channel}
+Title: {title}
+Youtube ID: {videoId}
+URL: {shortUrl}
+```
+
+**Implementation**:
+```javascript
+function buildMetadataHeader(metadata, videoId) {
+  const shortUrl = this.buildShortUrl(videoId);
+
+  return [
+    `Channel: ${metadata.channel}`,
+    `Title: ${metadata.title}`,
+    `Youtube ID: ${videoId}`,
+    `URL: ${shortUrl}`
+  ].join('\n');
+}
+```
+
+**Example Output**:
+```
+Channel: JavaScript Mastery
+Title: How to Build REST APIs - Complete Tutorial
+Youtube ID: dQw4w9WgXcQ
+URL: https://youtu.be/dQw4w9WgXcQ
+```
+
+**Field Preservation**:
+- `Channel`: Preserved as-is from API (or "Unknown Channel")
+- `Title`: Original unmodified title (or "Unknown Title")
+- `Youtube ID`: Video identifier
+- `URL`: Standardized short format
+
+## Stage 5: Transcript Storage
 
 After successfully fetching a transcript from the API, it must be persisted to disk immediately (FR-2.3).
 
@@ -457,10 +765,11 @@ To ensure crash resilience (FR-9.2), the system uses atomic writes:
 
 **Implementation**:
 ```javascript
-async function saveTranscript(videoId, content) {
+async function saveTranscript(videoId, formattedTitle, content) {
+  const filename = `${videoId}_${formattedTitle}.md`;
   const transcriptPath = path.join(
     this.paths.getTranscriptsPath(),
-    `${videoId}.md`
+    filename
   );
   const tempPath = `${transcriptPath}.tmp`;
 
@@ -477,7 +786,7 @@ async function saveTranscript(videoId, content) {
       throw new Error('Transcript file verification failed');
     }
 
-    console.log(`[StorageService] Saved transcript: ${videoId}.md`);
+    console.log(`[StorageService] Saved transcript: ${filename}`);
   } catch (error) {
     // Cleanup temporary file if it exists
     await fs.remove(tempPath).catch(() => {});
@@ -488,7 +797,7 @@ async function saveTranscript(videoId, content) {
 
 ### Storage Location
 
-**Path**: `~/.transcriptor/transcripts/{videoId}.md`
+**Path**: `~/.transcriptor/transcripts/{videoId}_{formattedTitle}.md`
 
 **Path Resolution**:
 - `~` expands to user home directory (cross-platform)
@@ -499,16 +808,30 @@ async function saveTranscript(videoId, content) {
 
 ### Content Stored
 
-**Format**: Plain text (markdown extension but no markdown formatting)
-**Content**: `transcript_only_text` field from API response as-is
+**Format**: Metadata header + plain text transcript
+**Structure**: Metadata section (4 lines) + blank line + transcript text
 **Encoding**: UTF-8
 
-**Example File Content** (`~/.transcriptor/transcripts/dQw4w9WgXcQ.md`):
+**Example File Content** (`~/.transcriptor/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`):
 ```
+Channel: JavaScript Mastery
+Title: How to Build REST APIs - Complete Tutorial
+Youtube ID: dQw4w9WgXcQ
+URL: https://youtu.be/dQw4w9WgXcQ
+
 Hello and welcome to this video tutorial. Today we're going to learn about JavaScript promises and async await patterns. Let's start with the basics of asynchronous programming.
 
 First, let's understand what a promise is. A promise is an object that represents the eventual completion or failure of an asynchronous operation. It allows you to write asynchronous code in a more synchronous fashion.
 ```
+
+**Content Composition**:
+1. **Metadata header** (from Stage 4):
+   - Channel: {channel name}
+   - Title: {original title}
+   - Youtube ID: {videoId}
+   - URL: {short URL}
+2. **Blank line separator**
+3. **Transcript text**: `transcript_only_text` field from API response as-is
 
 ### Size Validation
 
@@ -530,21 +853,22 @@ Files exceeding this limit are rejected and logged as errors.
 **Scenario**: Process crashes after API fetch but before file write completes
 
 **State**:
-- API returned transcript content
-- Temporary file may partially exist: `dQw4w9WgXcQ.md.tmp`
-- Final file does not exist: `dQw4w9WgXcQ.md`
+- API returned transcript and metadata
+- Temporary file may partially exist: `dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md.tmp`
+- Final file does not exist: `dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`
 - Registry not updated
 
 **Recovery**: User re-runs `transcriptor`
 1. Cache check: Registry entry missing → cache miss
-2. File check: `dQw4w9WgXcQ.md` doesn't exist → cache miss
-3. API fetch: Fetch transcript again (idempotent operation)
-4. Save: Complete atomic write successfully
-5. Registry update: Add entry to data.json
+2. File check: File doesn't exist → cache miss
+3. API fetch: Fetch transcript and metadata again (idempotent operations)
+4. Format title and build header
+5. Save: Complete atomic write successfully with header
+6. Registry update: Add entry to data.json with metadata
 
 **Result**: No data loss, system recovers automatically
 
-## Stage 5: Registry Update
+## Stage 6: Registry Update
 
 After saving the transcript file, the system updates the metadata registry to track the transcript's existence and link locations.
 
@@ -557,6 +881,8 @@ After saving the transcript file, the system updates the metadata registry to tr
 {
   "videoId": {
     "date_added": "YYYY-MM-DD",
+    "channel": "Channel Name",
+    "title": "Original Video Title",
     "links": []
   }
 }
@@ -569,6 +895,8 @@ After saving the transcript file, the system updates the metadata registry to tr
 {
   "dQw4w9WgXcQ": {
     "date_added": "2025-11-19",
+    "channel": "JavaScript Mastery",
+    "title": "How to Build REST APIs - Complete Tutorial",
     "links": []
   }
 }
@@ -577,19 +905,21 @@ After saving the transcript file, the system updates the metadata registry to tr
 ### Registry Update Process
 
 ```javascript
-async function updateRegistry(videoId) {
+async function updateRegistry(videoId, metadata) {
   // 1. Load current registry
   const registry = await this.loadRegistry();
 
   // 2. Check if entry already exists
   if (!registry[videoId]) {
-    // 3. Create new entry with current date
+    // 3. Create new entry with current date and metadata
     registry[videoId] = {
       date_added: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+      channel: metadata.channel,
+      title: metadata.title,
       links: []
     };
   }
-  // If entry exists, preserve existing date_added and links
+  // If entry exists, preserve existing date_added, metadata, and links
 
   // 4. Save updated registry atomically
   await this.saveRegistry(registry);
@@ -635,8 +965,10 @@ Before writing, the registry structure is validated:
 
 **Validation Rules**:
 - Must be an object (not array or primitive)
-- Each entry must have exactly two keys: `date_added`, `links`
+- Each entry must have exactly four keys: `date_added`, `channel`, `title`, `links`
 - `date_added` must match `YYYY-MM-DD` format
+- `channel` must be a non-empty string
+- `title` must be a non-empty string
 - `links` must be an array
 
 **Code Reference**: `src/services/StorageService.js` - `isValidRegistryStructure()`
@@ -652,12 +984,23 @@ function isValidRegistryStructure(data) {
 
     // Check required keys
     const keys = Object.keys(entry);
-    if (keys.length !== 2 || !keys.includes('date_added') || !keys.includes('links')) {
+    const requiredKeys = ['date_added', 'channel', 'title', 'links'];
+    if (keys.length !== 4 || !requiredKeys.every(key => keys.includes(key))) {
       return false;
     }
 
     // Validate date_added format
     if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.date_added)) {
+      return false;
+    }
+
+    // Validate channel is non-empty string
+    if (typeof entry.channel !== 'string' || entry.channel.length === 0) {
+      return false;
+    }
+
+    // Validate title is non-empty string
+    if (typeof entry.title !== 'string' || entry.title.length === 0) {
       return false;
     }
 
@@ -679,11 +1022,11 @@ If registry write fails:
 - Log error: `"[StorageService] Failed to update registry: {error}"`
 - Transcript file remains on disk (already saved in Stage 4)
 - Continue processing (don't exit)
-- On next run, auto-maintenance detects orphaned file and adds to registry
+- On next run, auto-maintenance detects orphaned file and adds to registry (future enhancement)
 
 **Result**: Data is not lost, system self-heals on subsequent runs
 
-## Stage 6: Link Creation
+## Stage 7: Link Creation
 
 After transcript storage and registry update, the system creates a symbolic link in the project-local directory.
 
@@ -700,21 +1043,23 @@ await fs.ensureDir(localDir); // Create if doesn't exist
 
 ### Symbolic Link Creation
 
-**Source** (target of link): `~/.transcriptor/transcripts/{videoId}.md`
-**Destination** (link location): `./transcripts/{videoId}.md`
+**Source** (target of link): `~/.transcriptor/transcripts/{videoId}_{formattedTitle}.md`
+**Destination** (link location): `./transcripts/{videoId}_{formattedTitle}.md`
 **Type**: Symbolic link (symlink)
+**Filename**: Built from video ID and formatted title
 
 **Code Reference**: `src/services/LinkManager.js` - `createLink()`
 
 ```javascript
-async function createLink(videoId) {
+async function createLink(videoId, formattedTitle) {
+  const filename = `${videoId}_${formattedTitle}.md`;
   const sourcePath = path.join(
     this.pathResolver.getTranscriptsPath(),
-    `${videoId}.md`
+    filename
   );
   const linkPath = path.join(
     this.pathResolver.getLocalTranscriptsPath(),
-    `${videoId}.md`
+    filename
   );
 
   // Ensure local directory exists
@@ -723,7 +1068,7 @@ async function createLink(videoId) {
   // Create symbolic link (force = overwrite if exists)
   await fs.symlink(sourcePath, linkPath, 'file');
 
-  console.log(`[LinkManager] Created link: ${videoId}.md`);
+  console.log(`[LinkManager] Created link: ${filename}`);
 
   // Track link in registry
   await this._trackLink(videoId, linkPath);
@@ -763,8 +1108,10 @@ async function _trackLink(videoId, linkPath) {
 {
   "dQw4w9WgXcQ": {
     "date_added": "2025-11-19",
+    "channel": "JavaScript Mastery",
+    "title": "How to Build REST APIs - Complete Tutorial",
     "links": [
-      "/Users/developer/project1/transcripts/dQw4w9WgXcQ.md"
+      "/Users/developer/project1/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"
     ]
   }
 }
@@ -775,9 +1122,11 @@ If the same video is processed from a different project:
 {
   "dQw4w9WgXcQ": {
     "date_added": "2025-11-19",
+    "channel": "JavaScript Mastery",
+    "title": "How to Build REST APIs - Complete Tutorial",
     "links": [
-      "/Users/developer/project1/transcripts/dQw4w9WgXcQ.md",
-      "/Users/developer/project2/transcripts/dQw4w9WgXcQ.md"
+      "/Users/developer/project1/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md",
+      "/Users/developer/project2/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"
     ]
   }
 }
@@ -785,7 +1134,7 @@ If the same video is processed from a different project:
 
 ### Overwrite Behavior
 
-If a link already exists at `./transcripts/{videoId}.md`, it is overwritten:
+If a link already exists at `./transcripts/{videoId}_{formattedTitle}.md`, it is overwritten:
 
 **Reason**: Ensures link points to correct source even if source path changed
 
@@ -827,7 +1176,7 @@ If link creation fails:
 - `EACCES`: Permission denied (log and continue)
 - `ENOENT`: Source file missing (indicates earlier failure)
 
-## Stage 7: Batch Processing & Summary
+## Stage 8: Batch Processing & Summary
 
 The system processes multiple URLs sequentially, isolating errors and tracking statistics.
 
@@ -1125,9 +1474,24 @@ async function removeAllLinks(videoId) {
 ```json
 // data.json
 {
-  "video1": {"date_added": "2025-11-01", "links": ["/project1/transcripts/video1.md"]},
-  "video2": {"date_added": "2025-11-15", "links": ["/project1/transcripts/video2.md"]},
-  "video3": {"date_added": "2025-11-20", "links": ["/project1/transcripts/video3.md"]}
+  "video1": {
+    "date_added": "2025-11-01",
+    "channel": "Channel A",
+    "title": "Old Video",
+    "links": ["/project1/transcripts/video1_old_video.md"]
+  },
+  "video2": {
+    "date_added": "2025-11-15",
+    "channel": "Channel B",
+    "title": "Recent Video",
+    "links": ["/project1/transcripts/video2_recent_video.md"]
+  },
+  "video3": {
+    "date_added": "2025-11-20",
+    "channel": "Channel C",
+    "title": "New Video",
+    "links": ["/project1/transcripts/video3_new_video.md"]
+  }
 }
 ```
 
@@ -1137,18 +1501,28 @@ async function removeAllLinks(videoId) {
 ```json
 // data.json
 {
-  "video2": {"date_added": "2025-11-15", "links": ["/project1/transcripts/video2.md"]},
-  "video3": {"date_added": "2025-11-20", "links": ["/project1/transcripts/video3.md"]}
+  "video2": {
+    "date_added": "2025-11-15",
+    "channel": "Channel B",
+    "title": "Recent Video",
+    "links": ["/project1/transcripts/video2_recent_video.md"]
+  },
+  "video3": {
+    "date_added": "2025-11-20",
+    "channel": "Channel C",
+    "title": "New Video",
+    "links": ["/project1/transcripts/video3_new_video.md"]
+  }
 }
 ```
 
 **Files Deleted**:
-- `~/.transcriptor/transcripts/video1.md` ✓
-- `/project1/transcripts/video1.md` (symlink) ✓
+- `~/.transcriptor/transcripts/video1_old_video.md` ✓
+- `/project1/transcripts/video1_old_video.md` (symlink) ✓
 
 **Files Kept**:
-- `~/.transcriptor/transcripts/video2.md` (date matches boundary)
-- `~/.transcriptor/transcripts/video3.md` (newer than boundary)
+- `~/.transcriptor/transcripts/video2_recent_video.md` (date matches boundary)
+- `~/.transcriptor/transcripts/video3_new_video.md` (newer than boundary)
 
 ## Auto-Maintenance Flow
 
@@ -1227,36 +1601,57 @@ async function _removeOrphanedEntry(videoId) {
 
 **Stage 2 Output**: Cache miss (no registry entry, no file)
 
-**Stage 3 Output**: Transcript text from API:
+**Stage 3 Output**:
+- Transcript text: `"Hello and welcome to this video tutorial..."`
+- Metadata: `{channel: "JavaScript Mastery", title: "How to Build REST APIs - Complete Tutorial"}`
+
+**Stage 4 Output**:
+- Formatted title: `"how_to_build_rest_apis_complete_tutorial"`
+- Metadata header:
 ```
+Channel: JavaScript Mastery
+Title: How to Build REST APIs - Complete Tutorial
+Youtube ID: dQw4w9WgXcQ
+URL: https://youtu.be/dQw4w9WgXcQ
+```
+
+**Stage 5 Output**: File created at `~/.transcriptor/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`:
+```
+Channel: JavaScript Mastery
+Title: How to Build REST APIs - Complete Tutorial
+Youtube ID: dQw4w9WgXcQ
+URL: https://youtu.be/dQw4w9WgXcQ
+
 Hello and welcome to this video tutorial...
 ```
 
-**Stage 4 Output**: File created at `~/.transcriptor/transcripts/dQw4w9WgXcQ.md`
-
-**Stage 5 Output**: Registry updated:
+**Stage 6 Output**: Registry updated:
 ```json
 {
   "dQw4w9WgXcQ": {
     "date_added": "2025-11-19",
+    "channel": "JavaScript Mastery",
+    "title": "How to Build REST APIs - Complete Tutorial",
     "links": []
   }
 }
 ```
 
-**Stage 6 Output**:
-- Link created: `./transcripts/dQw4w9WgXcQ.md` → `~/.transcriptor/transcripts/dQw4w9WgXcQ.md`
+**Stage 7 Output**:
+- Link created: `./transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` → `~/.transcriptor/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`
 - Registry updated:
 ```json
 {
   "dQw4w9WgXcQ": {
     "date_added": "2025-11-19",
-    "links": ["/Users/developer/project1/transcripts/dQw4w9WgXcQ.md"]
+    "channel": "JavaScript Mastery",
+    "title": "How to Build REST APIs - Complete Tutorial",
+    "links": ["/Users/developer/project1/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"]
   }
 }
 ```
 
-**Stage 7 Output**: Summary report showing 1 success, 0 cached, 1 new fetch
+**Stage 8 Output**: Summary report showing 1 success, 0 cached, 1 new fetch
 
 ### Example 2: Complete Flow for Cached Video
 
@@ -1270,24 +1665,28 @@ Hello and welcome to this video tutorial...
 
 **Stage 4**: Skipped (cache hit)
 
-**Stage 5**: Skipped (entry already exists)
+**Stage 5**: Skipped (cache hit)
 
-**Stage 6 Output**:
-- Link created (or verified): `./transcripts/dQw4w9WgXcQ.md`
+**Stage 6**: Skipped (entry already exists)
+
+**Stage 7 Output**:
+- Link created (or verified): `./transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`
 - Registry updated (link path added if not already tracked):
 ```json
 {
   "dQw4w9WgXcQ": {
     "date_added": "2025-11-19",
+    "channel": "JavaScript Mastery",
+    "title": "How to Build REST APIs - Complete Tutorial",
     "links": [
-      "/Users/developer/project1/transcripts/dQw4w9WgXcQ.md",
-      "/Users/developer/project2/transcripts/dQw4w9WgXcQ.md"
+      "/Users/developer/project1/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md",
+      "/Users/developer/project2/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"
     ]
   }
 }
 ```
 
-**Stage 7 Output**: Summary report showing 1 success, 1 cached, 0 new fetches
+**Stage 8 Output**: Summary report showing 1 success, 1 cached, 0 new fetches
 
 ## References
 
@@ -1295,8 +1694,11 @@ Hello and welcome to this video tutorial...
   - Workflow Orchestration: `src/services/TranscriptService.js`
   - Storage Operations: `src/services/StorageService.js`
   - API Integration: `src/services/APIClient.js`
+  - Metadata Operations: `src/services/MetadataService.js`
   - Link Management: `src/services/LinkManager.js`
   - Auto-Maintenance: `src/services/MaintenanceService.js`
+  - Title Formatting: `src/utils/titleFormatter.js`
+  - URL Shortening: `src/utils/urlShortener.js`
   - Process Command: `src/commands/process.js`
 
 - **Related Documentation**:
@@ -1305,6 +1707,6 @@ Hello and welcome to this video tutorial...
   - Contribution Guidelines: `docs/CONTRIBUTING.md`
 
 - **Requirements**:
-  - Functional Requirements: FR-1 through FR-10
-  - Technical Requirements: TR-1 through TR-19
+  - Functional Requirements: FR-1 through FR-11
+  - Technical Requirements: TR-1 through TR-29
   - Business Rules: BR-1 through BR-4

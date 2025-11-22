@@ -1,13 +1,13 @@
 # Tasks
 
-<!-- Task List Generated: 2025-11-18 -->
-<!-- Next Review Recommended: 2025-11-25 -->
+<!-- Task List Generated: 2025-11-19 -->
+<!-- Next Review Recommended: 2025-11-26 -->
 
 ## Development Sequence Notes
 
-Priority order: 1.0 → 2.0 → 3.0 → 4.0 → 5.0 → 6.0 (can parallel with 7.0) → 8.0 → 9.0
-Critical path: 1.0 → 2.1 → 3.1 → 4.1 → 5.1
-High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
+Priority order: 1.0 → 2.0 → 3.0 → 4.0 → 5.0 → 6.0 (can parallel with 7.0) → 8.0 → 9.0 → 10.0
+Critical path: 1.0 → 2.1 → 3.1 → 4.1 → 5.1 → 10.1 → 10.2
+High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform), 10.1 (oEmbed API integration)
 
 ## 1.0 Project Initialization & Setup
 
@@ -260,3 +260,87 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform)
   - [x] 9.3.4 Implement progress indicators
   - [x] 9.3.5 Add verbose/quiet mode options
   - [x] 9.3.6 Profile and optimize bottlenecks
+
+## 10.0 Metadata Collection Feature
+
+<!-- Estimated: 16 hours total | Depends on: 4.1, 5.4 | Critical for FR-2.2, FR-2.5, FR-3.3, FR-11 -->
+
+- [x] 10.1 MetadataService implementation [CRITICAL PATH] (implements FR-2.2, TR-20)
+  - [x] 10.1.1 Create MetadataService class in src/services/MetadataService.js
+  - [x] 10.1.2 Implement fetchVideoMetadata method using YouTube oEmbed API
+  - [x] 10.1.3 Configure axios GET request to https://www.youtube.com/oembed endpoint
+  - [x] 10.1.4 Add 15s timeout for metadata API calls (TR-20)
+  - [x] 10.1.5 Extract author_name as channel from oEmbed response
+  - [x] 10.1.6 Extract title from oEmbed response
+  - [x] 10.1.7 Implement fallback values (Unknown Channel, Unknown Title) for failures
+  - [x] 10.1.8 Add error handling for 400, 404, 500, timeout (implements TR-29)
+  - [x] 10.1.9 Ensure metadata fetch failures are non-fatal (log warning, continue processing)
+  - [x] 10.1.10 Add unit validation for metadata response structure
+- [x] 10.2 Title formatting utility (implements FR-2.5, TR-21, TR-26)
+  - [x] 10.2.1 Create formatTitle method in MetadataService or utils/TitleFormatter.js
+  - [x] 10.2.2 Implement trim and lowercase transformation
+  - [x] 10.2.3 Replace spaces with underscores (regex /\s+/g)
+  - [x] 10.2.4 Remove invalid characters (allow only a-z0-9_-)
+  - [x] 10.2.5 Collapse consecutive underscores to single underscore
+  - [x] 10.2.6 Remove leading/trailing underscores
+  - [x] 10.2.7 Truncate to 100 characters for filesystem safety
+  - [x] 10.2.8 Handle edge cases: empty string, null input (fallback to "untitled")
+  - [x] 10.2.9 Validate output pattern matches /^[a-z0-9][a-z0-9_-]*$/
+- [x] 10.3 Short URL builder utility (implements FR-3.3, TR-22, TR-28)
+  - [x] 10.3.1 Create buildShortUrl method in MetadataService or utils/URLBuilder.js
+  - [x] 10.3.2 Implement template: https://youtu.be/{videoId}
+  - [x] 10.3.3 Add videoId validation (11 chars, alphanumeric+dash)
+  - [x] 10.3.4 Return standardized short URL format
+- [x] 10.4 File naming updates (implements FR-2.4, TR-23)
+  - [x] 10.4.1 Update StorageService.saveTranscript to accept metadata parameter
+  - [x] 10.4.2 Build filename using {videoId}_{formattedTitle}.md pattern
+  - [x] 10.4.3 Update StorageService.getTranscriptPath to use metadata-based naming
+  - [x] 10.4.4 Ensure filename total length < 255 chars (filesystem limit)
+  - [x] 10.4.5 Update StorageService.transcriptExists to search by metadata-based filename
+  - [x] 10.4.6 Update all file operation methods to use new naming convention
+- [x] 10.5 Registry schema updates (implements FR-3.2, TR-24)
+  - [x] 10.5.1 Update StorageService.ALLOWED_ENTRY_KEYS to include channel and title
+  - [x] 10.5.2 Update isValidRegistryStructure to validate channel field (non-empty string)
+  - [x] 10.5.3 Update isValidRegistryStructure to validate title field (non-empty string)
+  - [x] 10.5.4 Update registry update operations to save metadata (channel, title)
+  - [x] 10.5.5 Ensure backward compatibility for existing registry entries
+  - [x] 10.5.6 Add migration logic to handle old registry format (if needed)
+- [x] 10.6 Metadata header builder (implements FR-11, TR-27)
+  - [x] 10.6.1 Create buildMetadataHeader method in StorageService or utils/HeaderBuilder.js
+  - [x] 10.6.2 Implement template: Channel, Title, Youtube ID, URL (4 lines)
+  - [x] 10.6.3 Use buildShortUrl for URL field
+  - [x] 10.6.4 Preserve original video title (no formatting in header)
+  - [x] 10.6.5 Validate no null fields before building header
+  - [x] 10.6.6 Return multiline string with proper formatting
+- [x] 10.7 Transcript processing workflow updates (implements FR-2, TR-25)
+  - [x] 10.7.1 Update TranscriptService constructor to accept MetadataService dependency
+  - [x] 10.7.2 Implement parallel fetch: Promise.all([fetchTranscript(), fetchMetadata()])
+  - [x] 10.7.3 Update processVideo to call fetchMetadata alongside fetchTranscript
+  - [x] 10.7.4 Pass metadata to StorageService.saveTranscript for header and filename
+  - [x] 10.7.5 Update registry update calls to include metadata (channel, title)
+  - [x] 10.7.6 Ensure metadata fetch failure does not block transcript processing
+  - [x] 10.7.7 Update cache checking logic to handle metadata-based filenames
+  - [x] 10.7.8 Update link creation to use metadata-based filenames
+- [x] 10.8 Error handling for metadata operations (implements TR-29)
+  - [x] 10.8.1 Add try-catch around fetchMetadata calls in TranscriptService
+  - [x] 10.8.2 Log warnings for metadata fetch failures (do not throw)
+  - [x] 10.8.3 Use fallback values when metadata unavailable
+  - [x] 10.8.4 Ensure transcript processing continues regardless of metadata failures
+  - [x] 10.8.5 Add metadata error statistics to TranscriptService.stats
+- [x] 10.9 Command updates for metadata feature
+  - [x] 10.9.1 Update src/commands/process.js to instantiate MetadataService
+  - [x] 10.9.2 Pass MetadataService to TranscriptService constructor
+  - [x] 10.9.3 Update src/commands/data.js to display channel and title in statistics
+  - [x] 10.9.4 Update StatisticsCalculator to include metadata fields
+  - [x] 10.9.5 Verify clean command handles metadata-based filenames correctly
+- [ ] 10.10 Integration testing and verification
+  - [ ] 10.10.1 Test fetchMetadata with valid video ID
+  - [ ] 10.10.2 Test fetchMetadata with invalid/deleted video (404 fallback)
+  - [ ] 10.10.3 Test title sanitization with special characters, spaces, unicode
+  - [ ] 10.10.4 Verify metadata headers appear in transcript files
+  - [ ] 10.10.5 Verify filenames use formatted titles {videoId}_{formattedTitle}.md
+  - [ ] 10.10.6 Verify registry contains channel and title fields
+  - [ ] 10.10.7 Test backward compatibility with existing transcripts (no metadata)
+  - [ ] 10.10.8 Verify data command displays metadata correctly
+  - [ ] 10.10.9 Verify clean command deletes metadata-based files
+  - [ ] 10.10.10 Test parallel fetch performance (transcript + metadata)
