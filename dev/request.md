@@ -1,18 +1,8 @@
 # Request
 
-Sometime the formatted youtube title appear as `unknown_title` and when I retry it appears with the right title.
+Add a feature, when use the command with `--rag-generator` argument, the script once finish to execute, will go into the transcripts folder ( cd ./transcripts ) and then execute the commande `claude --dangerously-skip-permissions -p /rag-generator`
 
-Can you add some rule to the API call who manage the title ?
-
-After formatting the title if it appears to be `unknown_title` you will make the script sleep 3sc and re-try.
-
-This should retry a maximum of 3 times after the first fail and if it is still `unknown_title` then its file, we save the file with this title.
-
-To verify if it works, you will go into the `./test-transcriptor` folder and run the `transcriptor` command. It should console.log when there is an API error and retries so you can verify if the process works.
-
-If the process works directly from the first time, therefor you can not verify your implementation, use the following command to test again:
-
-`transcriptor clean 2025-12-01 && rm -rf ~/dev/nodejs-youtube-transcriptor/test-transcriptor/transcripts` it will purge all result and you can run again `transcriptor`. The purpose is to have an API fail and to observe the script doing it's retry to get the right title. If you can not have a title failing after 3 attempt ( cleaning and retry ) then stop to avoid too much api cost.
+Dont test it, I will make the test myself.
 
 ## Implementation Workflow
 
