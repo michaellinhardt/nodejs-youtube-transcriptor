@@ -363,11 +363,11 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform), 10.
   - [ ] 11.2.4 Test channel formatting with special characters
   - [ ] 11.2.5 Verify channel formatting matches title formatting rules
 - [x] 11.3 Filename pattern updates (implements FR-2.4, TR-23)
-  - [x] 11.3.1 Add "transcript_" prefix to buildFilename utility
+  - [x] 11.3.1 Add "tr_" prefix to buildFilename utility (updated from "transcript_")
   - [x] 11.3.2 Update StorageService.getTranscriptPath to use new pattern
   - [x] 11.3.3 Update StorageService.saveTranscript filename generation
   - [x] 11.3.4 Update LinkManager.createLink to use new filename pattern
-  - [x] 11.3.5 Update StorageService.transcriptExists to search with new pattern
+  - [x] 11.3.5 Update StorageService.transcriptExists to search with new pattern (supports tr_, transcript_, and no prefix)
   - [ ] 11.3.6 Test filename generation with prefix in both locations
   - [ ] 11.3.7 Verify backward compatibility with old filenames during cache checks
 - [x] 11.4 Registry structure cleanup (implements FR-3.2, TR-24)
@@ -399,7 +399,7 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform), 10.
   - [x] 11.7.2 Implement automatic migration on registry load
   - [x] 11.7.3 Convert YYYY-MM-DD dates to YYMMDDTHHMM (preserve original timestamp or use midnight)
   - [x] 11.7.4 Remove links arrays from all registry entries
-  - [x] 11.7.5 Rename old transcript files to new pattern (add transcript_ prefix)
+  - [x] 11.7.5 Rename old transcript files to new pattern (add tr_ prefix, supports migration from transcript_ and no prefix)
   - [x] 11.7.6 Update old transcript file headers to new markdown structure
   - [x] 11.7.7 Create backup of data.json before migration
   - [x] 11.7.8 Log migration actions for user visibility

@@ -29,6 +29,16 @@ class RAGExecutor {
    * - default: Uses claude CLI with /rag-generator slash command
    * - gemini: Uses standalone gemini-rag-generator command
    */
+  /**
+   * Get the path to the gemini-rag-generator script
+   * Resolves relative to the project root directory
+   */
+  static getGeminiScriptPath() {
+    // Get the project root (where package.json is located)
+    const projectRoot = path.resolve(__dirname, '../..');
+    return path.join(projectRoot, 'scripts', 'gemini-rag-generator.sh');
+  }
+
   static COMMAND_TYPES = {
     default: {
       type: 'claude',
@@ -36,7 +46,10 @@ class RAGExecutor {
     },
     gemini: {
       type: 'standalone',
-      command: 'gemini-rag-generator'
+      // Use getter function to resolve path dynamically
+      get command() {
+        return RAGExecutor.getGeminiScriptPath();
+      }
     }
   };
   /**
@@ -51,7 +64,7 @@ class RAGExecutor {
    *
    * Commands:
    * - default: claude --dangerously-skip-permissions -p /rag-generator
-   * - gemini: gemini-rag-generator
+   * - gemini: {projectRoot}/scripts/gemini-rag-generator.sh
    * Working directory: {projectDir}/transcripts
    * Output: Direct to console (stdio: inherit)
    *
@@ -104,7 +117,12 @@ class RAGExecutor {
         {
           stdio: 'inherit', // Direct console output (real-time streaming)
           shell: true, // Enable shell parsing (required for cd command)
-          env: process.env // Pass environment variables to child process
+          env: {
+            ...process.env,
+            // Force color output for subprocesses
+            FORCE_COLOR: '1',
+            TERM: process.env.TERM || 'xterm-256color'
+          }
         }
       );
 
@@ -136,10 +154,13 @@ class RAGExecutor {
 
         // TR-40: Provide actionable error messages based on error code
         // Include command type in error messages for clarity
-        const cmdName = commandType === 'gemini' ? 'gemini-rag-generator' : 'claude';
+        const cmdName =
+          commandType === 'gemini'
+            ? RAGExecutor.getGeminiScriptPath()
+            : 'claude';
         const installHint =
           commandType === 'gemini'
-            ? 'Please ensure gemini-rag-generator is installed and in your PATH.'
+            ? `Please ensure the script exists at ${RAGExecutor.getGeminiScriptPath()}`
             : 'Please install claude-code CLI tool.';
 
         if (err.code === 'ENOENT') {

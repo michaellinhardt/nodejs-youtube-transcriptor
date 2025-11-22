@@ -897,15 +897,15 @@ The fetched title is used to generate descriptive filenames:
 - Input: `"How to Build REST APIs - Complete Tutorial"`
 - Process: Lowercase → replace spaces → sanitize → truncate
 - Output: `"how_to_build_rest_apis_complete_tutorial"`
-- Filename: `"transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"`
+- Filename: `"tr_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"`
 
-**Filename Pattern**: `transcript_{youtubeID}_{formatted_title}.md`
+**Filename Pattern**: `tr_{youtubeID}_{formatted_title}.md`
 
-**Fallback Filename**: If title is "Unknown Title", format as `"transcript_{videoId}_unknown_title.md"`
+**Fallback Filename**: If title is "Unknown Title", format as `"tr_{videoId}_unknown_title.md"`
 
 **File Locations**: The same naming pattern is applied to both storage locations:
-- Project directory: `./transcripts/transcript_{youtubeID}_{formatted_title}.md`
-- Global registry: `~/.transcriptor/transcripts/transcript_{youtubeID}_{formatted_title}.md`
+- Project directory: `./transcripts/tr_{youtubeID}_{formatted_title}.md`
+- Global registry: `~/.transcriptor/transcripts/tr_{youtubeID}_{formatted_title}.md`
 
 ### Integration with File Content
 
@@ -1214,7 +1214,7 @@ function matchesDate(dateAdded, targetDate) {
 
 **Notes**:
 - Videos sorted by `date_added` (newest first - optional, not enforced)
-- Each entry corresponds to a transcript file: `transcript_{youtubeId}_{title}.md`
+- Each entry corresponds to a transcript file: `tr_{youtubeId}_{title}.md`
 - Fallback values shown in last entry (metadata fetch failed)
 
 ### Validation Rules

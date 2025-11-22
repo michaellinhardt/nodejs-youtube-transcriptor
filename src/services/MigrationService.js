@@ -6,12 +6,12 @@ const dateUtils = require('../utils/dateUtils');
  * Migration Service
  *
  * Handles automatic data structure migration from old format to new format
- * Implements data transformation for Task 11.0 migration requirements
+ * Implements data transformation for migration requirements
  *
  * Migration transformations:
  * - Date format: YYYY-MM-DD -> YYMMDDTHHMM
  * - Registry structure: Remove links field
- * - Filenames: {videoId}*.md -> transcript_{videoId}*.md
+ * - Filenames: {videoId}*.md -> transcript_{videoId}*.md -> tr_{videoId}*.md
  * - Metadata: Add fallback channel/title if missing
  *
  * @class MigrationService
@@ -141,7 +141,7 @@ class MigrationService {
 
   /**
    * Rename transcript files from old to new pattern
-   * Pattern: {videoId}*.md -> transcript_{videoId}*.md
+   * Pattern: {videoId}*.md -> transcript_{videoId}*.md -> tr_{videoId}*.md
    * CRITICAL FIX: Added file locking and transaction boundaries
    *
    * @param {Object} registry - Registry data (for video ID validation)
@@ -171,12 +171,37 @@ class MigrationService {
       const files = await fs.readdir(transcriptsPath);
 
       for (const file of files) {
-        // Skip lock file and files already with transcript_ prefix
-        if (file === '.migration.lock' || file.startsWith('transcript_')) {
+        // Skip lock file and files already with tr_ prefix
+        if (file === '.migration.lock' || file.startsWith('tr_')) {
           continue;
         }
 
-        // Check if file matches old pattern: {videoId}_*.md or {videoId}.md
+        // Migration path 1: transcript_ -> tr_
+        if (file.startsWith('transcript_')) {
+          const oldPath = path.join(transcriptsPath, file);
+          const newFile = file.replace(/^transcript_/, 'tr_');
+          const newPath = path.join(transcriptsPath, newFile);
+
+          // Check if target already exists
+          if (await fs.pathExists(newPath)) {
+            console.warn(`  Target exists, skipping: ${newFile}`);
+            continue;
+          }
+
+          // CRITICAL: Validate paths before rename (prevent traversal)
+          if (!oldPath.startsWith(transcriptsPath) || !newPath.startsWith(transcriptsPath)) {
+            throw new Error(`Path traversal attempt detected: ${file}`);
+          }
+
+          // Perform rename
+          renameLog.push({ from: file, to: newFile });
+          await fs.rename(oldPath, newPath);
+          stats.filesRenamed++;
+          console.log(`  Renamed: ${file} -> ${newFile}`);
+          continue;
+        }
+
+        // Migration path 2: {videoId}*.md -> tr_{videoId}*.md
         const videoIdMatch = /^([A-Za-z0-9_-]{11})(_.*)?\.md$/.exec(file);
         if (!videoIdMatch) {
           continue;
@@ -190,9 +215,9 @@ class MigrationService {
           continue;
         }
 
-        // Rename: add transcript_ prefix
+        // Rename: add tr_ prefix
         const oldPath = path.join(transcriptsPath, file);
-        const newFile = `transcript_${file}`;
+        const newFile = `tr_${file}`;
         const newPath = path.join(transcriptsPath, newFile);
 
         // Check if target already exists

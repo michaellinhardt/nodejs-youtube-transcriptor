@@ -103,17 +103,17 @@ Storage:
   ~/.transcriptor/:
     data.json: registry
     transcripts/:
-      transcript_{videoId}_{formattedTitle}.md: content
+      tr_{videoId}_{formattedTitle}.md: content
   ./transcripts/:
-    transcript_{videoId}_{formattedTitle}.md: symlink
+    tr_{videoId}_{formattedTitle}.md: symlink
 
 FileNaming:
-  pattern: "transcript_{videoId}_{formattedTitle}.md"
+  pattern: "tr_{videoId}_{formattedTitle}.md"
   applies_to:
     - ~/.transcriptor/transcripts/
     - ./transcripts/
   components:
-    prefix: "transcript_"
+    prefix: "tr_"
     videoId: string|11_chars
     separator: "_"
     formattedTitle: sanitized_title|max_100_chars
@@ -191,7 +191,7 @@ Process:
   - validateFile() → boolean
   - parseURLs() → videoIds[]
   - forEach(processVideo)
-Output: ./transcripts/transcript_{id}_{formattedTitle}.md
+Output: ./transcripts/tr_{id}_{formattedTitle}.md
 Error: display_help
 ```
 
@@ -332,8 +332,8 @@ AtomicWrite:
 
 ```yaml
 CreateLink:
-  source: ~/.transcriptor/transcripts/transcript_{id}_{formattedTitle}.md
-  target: ./transcripts/transcript_{id}_{formattedTitle}.md
+  source: ~/.transcriptor/transcripts/tr_{id}_{formattedTitle}.md
+  target: ./transcripts/tr_{id}_{formattedTitle}.md
   type: symbolic
   force: true
   filename: build_from_registry_metadata
@@ -572,7 +572,7 @@ SaveRegistry:
 
 ```yaml
 SaveTranscript:
-  path: ~/.transcriptor/transcripts/transcript_{id}_{formattedTitle}.md
+  path: ~/.transcriptor/transcripts/tr_{id}_{formattedTitle}.md
   content: full_markdown_structure
   format: markdown
   encoding: utf-8
@@ -665,11 +665,11 @@ BuildFilename:
     title: string
   process:
     - formatted = formatTitle(title)
-    - filename = "transcript_{videoId}_{formatted}.md"
+    - filename = "tr_{videoId}_{formatted}.md"
   validation:
     - total_length < 255 # Filesystem limit
     - no_path_separators
-  output: "transcript_{videoId}_{formattedTitle}.md"
+  output: "tr_{videoId}_{formattedTitle}.md"
   applies_to:
     - ~/.transcriptor/transcripts/
     - ./transcripts/ (symlinks)
@@ -779,7 +779,7 @@ CleanupDateMatching:
 ```yaml
 DeleteTranscript:
   input: videoId, metadata
-  target: transcript_{videoId}_{formattedTitle}.md
+  target: tr_{videoId}_{formattedTitle}.md
   location: ~/.transcriptor/transcripts/
   operation:
     - build_filename(videoId, metadata.title)
@@ -1114,12 +1114,13 @@ ExecuteRAGGeneratorGemini:
     - --rag-generator-gemini_flag_true
   execution_context:
     cwd: ./transcripts # local project transcripts directory
-    command: gemini-rag-generator # standalone command
+    command: {projectRoot}/scripts/gemini-rag-generator.sh # resolved from project root
   method: child_process.spawn
   spawn_options:
     stdio: inherit # output directly to console
     shell: true # allows shell syntax parsing
   error_isolation: nonfatal # RAG failure does not fail transcript processing
+  path_resolution: path.resolve(__dirname, '../..', 'scripts', 'gemini-rag-generator.sh')
 ```
 
 ### TR-48: RAG Executor Command Type Support (implements FR-13.2)
@@ -1133,8 +1134,9 @@ RAGExecutorCommandTypes:
       description: Standard RAG processing using Claude CLI
     - type: gemini
       command_type: standalone
-      command: gemini-rag-generator
-      description: Gemini-based RAG processing using standalone command
+      command: {projectRoot}/scripts/gemini-rag-generator.sh
+      description: Gemini-based RAG processing using project script
+      path_resolution: dynamic_getter_function
   implementation:
     method: RAGExecutor.execute(projectDir, commandType)
     parameter: commandType = 'default' | 'gemini'
@@ -1144,7 +1146,8 @@ RAGExecutorCommandTypes:
         command: claude --dangerously-skip-permissions -p /rag-generator
       gemini:
         type: standalone
-        command: gemini-rag-generator
+        command: getGeminiScriptPath() # Resolves to {projectRoot}/scripts/gemini-rag-generator.sh
+        resolution: path.resolve(__dirname, '../..', 'scripts', 'gemini-rag-generator.sh')
 ```
 
 ### TR-49: Mutual Exclusivity Validation (implements FR-13.3)

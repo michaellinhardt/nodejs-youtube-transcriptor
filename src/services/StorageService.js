@@ -454,15 +454,15 @@ class StorageService {
   /**
    * Build transcript filename from video ID and metadata
    * CRITICAL: Implements FR-2.4, TR-23 metadata-based naming
-   * UPDATED Task 11.3: Adds transcript_ prefix to filenames
+   * UPDATED: Uses tr_ prefix for filenames
    * @param {string} videoId - YouTube video ID
    * @param {Object} metadata - {channel, title} (optional for backward compatibility)
-   * @returns {string} Filename: transcript_{videoId}_{formattedTitle}.md or transcript_{videoId}.md
+   * @returns {string} Filename: tr_{videoId}_{formattedTitle}.md or tr_{videoId}.md
    */
   async buildFilename(videoId, metadata) {
-    // Backward compatibility: old format if no metadata (with transcript_ prefix)
+    // Backward compatibility: old format if no metadata (with tr_ prefix)
     if (!metadata || !metadata.title) {
-      return `transcript_${videoId}.md`;
+      return `tr_${videoId}.md`;
     }
 
     // Format title for filesystem safety
@@ -470,16 +470,16 @@ class StorageService {
     const metadataService = new MetadataService();
     const formattedTitle = metadataService.formatTitle(metadata.title);
 
-    // Construct base filename with transcript_ prefix (Task 11.3)
-    let filename = `transcript_${videoId}_${formattedTitle}.md`;
+    // Construct base filename with tr_ prefix
+    let filename = `tr_${videoId}_${formattedTitle}.md`;
 
     // CRITICAL: Validate total length < 255 (filesystem limit)
-    // Account for prefix: 11 chars for "transcript_"
+    // Account for prefix: 3 chars for "tr_"
     if (filename.length > 255) {
       // Truncate formatted title to fit
-      const maxTitleLength = 255 - 11 - videoId.length - 4; // 11 for "transcript_", 4 for "_.md"
+      const maxTitleLength = 255 - 3 - videoId.length - 4; // 3 for "tr_", 4 for "_.md"
       const truncatedTitle = formattedTitle.substring(0, maxTitleLength);
-      filename = `transcript_${videoId}_${truncatedTitle}.md`;
+      filename = `tr_${videoId}_${truncatedTitle}.md`;
     }
 
     // CRITICAL: Handle filename collisions (different videos, same sanitized title)
@@ -727,14 +727,23 @@ class StorageService {
     try {
       const files = await fs.readdir(transcriptsPath);
 
-      // PRIORITY 1: Search for NEW pattern first (transcript_ prefix)
+      // PRIORITY 1: Search for NEW pattern first (tr_ prefix)
       let match = files.find(
         (file) =>
-          (file.startsWith(`transcript_${videoId}_`) && file.endsWith('.md')) ||
-          file === `transcript_${videoId}.md`
+          (file.startsWith(`tr_${videoId}_`) && file.endsWith('.md')) ||
+          file === `tr_${videoId}.md`
       );
 
-      // PRIORITY 2: Fallback to OLD pattern for backward compatibility
+      // PRIORITY 2: Fallback to OLD pattern for backward compatibility (transcript_ prefix)
+      if (!match) {
+        match = files.find(
+          (file) =>
+            (file.startsWith(`transcript_${videoId}_`) && file.endsWith('.md')) ||
+            file === `transcript_${videoId}.md`
+        );
+      }
+
+      // PRIORITY 3: Fallback to OLDEST pattern for backward compatibility (no prefix)
       if (!match) {
         match = files.find(
           (file) =>

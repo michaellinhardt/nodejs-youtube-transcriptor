@@ -41,7 +41,7 @@ FR-2.3: System shall check cache before fetching
 
 FR-2.4: System shall persist transcripts immediately
 
-- Format: transcript_{video-id}_{formatted-title}.md file
+- Format: tr_{video-id}_{formatted-title}.md file
 - Location: Both ~/.transcriptor/transcripts and project ./transcripts directories
 - Content: Metadata section followed by transcript text
 - Timing: Save after each successful fetch
@@ -100,7 +100,7 @@ FR-4.1: System shall create project-local access points
 
 - Location: ./transcripts/ folder in current directory
 - Type: Symbolic links to centralized storage
-- Naming: transcript_{video-id}_{formatted-title}.md
+- Naming: tr_{video-id}_{formatted-title}.md
 
 ### FR-11: Transcript File Structure
 
@@ -213,7 +213,7 @@ FR-13.2: System shall execute RAG generator Gemini after successful processing
 
 - Trigger: All transcripts from youtube.md processed successfully
 - Execution context: ./transcripts directory
-- Command: `gemini-rag-generator`
+- Command: `{projectRoot}/scripts/gemini-rag-generator.sh`
 - Timing: Executes only after main transcript processing completes
 
 FR-13.3: RAG generator Gemini execution constraints

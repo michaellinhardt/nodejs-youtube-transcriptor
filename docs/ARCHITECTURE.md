@@ -352,10 +352,10 @@ class LinkManager {
 
 **Link Structure**:
 ```
-Source: ~/.transcriptor/transcripts/transcript_{videoId}_{formattedTitle}.md
-Target: ./transcripts/transcript_{videoId}_{formattedTitle}.md (project-local)
+Source: ~/.transcriptor/transcripts/tr_{videoId}_{formattedTitle}.md
+Target: ./transcripts/tr_{videoId}_{formattedTitle}.md (project-local)
 Type: Symbolic link
-Filename: Built using formatted title (transcript_{videoId}_{formattedTitle}.md)
+Filename: Built using formatted title (tr_{videoId}_{formattedTitle}.md)
 ```
 
 #### MaintenanceService (src/services/MaintenanceService.js)
@@ -472,7 +472,7 @@ sequenceDiagram
 
         TS->>LinkMgr: createLink(videoId, formattedTitle)
         LinkMgr->>FS: Ensure ./transcripts/ directory
-        LinkMgr->>FS: Create symlink ./transcripts/transcript_{id}_{formattedTitle}.md
+        LinkMgr->>FS: Create symlink ./transcripts/tr_{id}_{formattedTitle}.md
         FS-->>LinkMgr: Link created
 
         TS-->>ProcessCmd: Success result
@@ -496,9 +496,9 @@ sequenceDiagram
    - Metadata from YouTube oEmbed API (no retry, non-fatal)
 7. **Title Formatting**: Sanitize title and channel for filesystem compatibility
 8. **Metadata Header**: Build header with formatted channel, formatted title, video ID, and URL
-9. **Storage**: Save transcript with metadata header to ~/.transcriptor/transcripts/transcript_{id}_{formattedTitle}.md immediately
+9. **Storage**: Save transcript with metadata header to ~/.transcriptor/transcripts/tr_{id}_{formattedTitle}.md immediately
 10. **Registry Update**: Add entry to data.json with date_added (YYMMDDTHHMM format), formatted channel, and formatted title
-11. **Link Creation**: Create symbolic link in ./transcripts/ pointing to central storage (transcript_{id}_{formattedTitle}.md)
+11. **Link Creation**: Create symbolic link in ./transcripts/ pointing to central storage (tr_{id}_{formattedTitle}.md)
 12. **Summary**: Display processing results (success count, cache hits, failures)
 
 ## Storage Architecture
@@ -508,14 +508,14 @@ graph TD
     A["~/.transcriptor/<br/>(Central Storage)"] --> B["data.json<br/>(Registry)"]
     A --> C["transcripts/"]
 
-    C --> C1["transcript_dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(Video 1 transcript)"]
-    C --> C2["transcript_jNQXAC9IVRw_python_tutorial.md<br/>(Video 2 transcript)"]
-    C --> C3["transcript_9bZkp7q19f0_react_hooks.md<br/>(Video N transcript)"]
+    C --> C1["tr_dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(Video 1 transcript)"]
+    C --> C2["tr_jNQXAC9IVRw_python_tutorial.md<br/>(Video 2 transcript)"]
+    C --> C3["tr_9bZkp7q19f0_react_hooks.md<br/>(Video N transcript)"]
 
-    D["./project1/transcripts/<br/>(Project Local)"] --> D1["transcript_dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(symlink)"]
-    D --> D2["transcript_jNQXAC9IVRw_python_tutorial.md<br/>(symlink)"]
+    D["./project1/transcripts/<br/>(Project Local)"] --> D1["tr_dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(symlink)"]
+    D --> D2["tr_jNQXAC9IVRw_python_tutorial.md<br/>(symlink)"]
 
-    E["./project2/transcripts/<br/>(Project Local)"] --> E1["transcript_dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(symlink)"]
+    E["./project2/transcripts/<br/>(Project Local)"] --> E1["tr_dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(symlink)"]
 
     D1 -.->|"points to"| C1
     D2 -.->|"points to"| C2
@@ -547,8 +547,8 @@ graph TD
   - `data.json`: Registry tracking all transcripts and links
   - `transcripts/`: Directory containing transcript markdown files
 
-**Transcript Files** (`~/.transcriptor/transcripts/transcript_{videoId}_{formattedTitle}.md`):
-- **Naming**: `transcript_` prefix + video ID + underscore + formatted title (FR-2.5, TR-23)
+**Transcript Files** (`~/.transcriptor/transcripts/tr_{videoId}_{formattedTitle}.md`):
+- **Naming**: `tr_` prefix + video ID + underscore + formatted title (FR-2.5, TR-23)
 - **Format**: Markdown with structured headers (FR-11)
 - **Content**:
   - `# Transcript` header
@@ -566,10 +566,10 @@ graph TD
 - **Write Strategy**: Atomic write (temp file + rename, per TR-8)
 - **Validation**: Structure validated on load, corrupted file regenerated
 
-**Project-Local Links** (`./transcripts/transcript_{videoId}_{formattedTitle}.md`):
+**Project-Local Links** (`./transcripts/tr_{videoId}_{formattedTitle}.md`):
 - **Type**: Symbolic links (symlinks)
 - **Target**: Points to central storage transcript
-- **Naming**: `transcript_` prefix + video ID + underscore + formatted title
+- **Naming**: `tr_` prefix + video ID + underscore + formatted title
 - **Purpose**: Project-specific access without file duplication
 - **Creation**: Automatic on transcript processing
 

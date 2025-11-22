@@ -200,7 +200,7 @@ const entryExists = registry.hasOwnProperty(videoId);
 ```javascript
 // When checking cache, we look for any file matching the video ID pattern
 // since the formatted title portion may vary
-const transcriptPattern = `~/.transcriptor/transcripts/transcript_${videoId}_*.md`;
+const transcriptPattern = `~/.transcriptor/transcripts/tr_${videoId}_*.md`;
 const fileExists = await fs.pathExists(transcriptPath);
 ```
 
@@ -782,7 +782,7 @@ To ensure crash resilience (FR-9.2), the system uses atomic writes:
 **Implementation**:
 ```javascript
 async function saveTranscript(videoId, formattedTitle, content) {
-  const filename = `transcript_${videoId}_${formattedTitle}.md`;
+  const filename = `tr_${videoId}_${formattedTitle}.md`;
   const transcriptPath = path.join(
     this.paths.getTranscriptsPath(),
     filename
@@ -813,7 +813,7 @@ async function saveTranscript(videoId, formattedTitle, content) {
 
 ### Storage Location
 
-**Path**: `~/.transcriptor/transcripts/transcript_{videoId}_{formattedTitle}.md`
+**Path**: `~/.transcriptor/transcripts/tr_{videoId}_{formattedTitle}.md`
 
 **Path Resolution**:
 
@@ -829,7 +829,7 @@ async function saveTranscript(videoId, formattedTitle, content) {
 **Structure**: Title header + Information section + Content section
 **Encoding**: UTF-8
 
-**Example File Content** (`~/.transcriptor/transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`):
+**Example File Content** (`~/.transcriptor/transcripts/tr_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`):
 
 ```markdown
 # Transcript
@@ -881,8 +881,8 @@ Files exceeding this limit are rejected and logged as errors.
 **State**:
 
 - API returned transcript and metadata
-- Temporary file may partially exist: `transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md.tmp`
-- Final file does not exist: `transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`
+- Temporary file may partially exist: `tr_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md.tmp`
+- Final file does not exist: `tr_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`
 - Registry not updated
 
 **Recovery**: User re-runs `transcriptor`
@@ -1076,16 +1076,16 @@ await fs.ensureDir(localDir); // Create if doesn't exist
 
 ### Symbolic Link Creation
 
-**Source** (target of link): `~/.transcriptor/transcripts/transcript_{videoId}_{formattedTitle}.md`
-**Destination** (link location): `./transcripts/transcript_{videoId}_{formattedTitle}.md`
+**Source** (target of link): `~/.transcriptor/transcripts/tr_{videoId}_{formattedTitle}.md`
+**Destination** (link location): `./transcripts/tr_{videoId}_{formattedTitle}.md`
 **Type**: Symbolic link (symlink)
-**Filename**: Built from video ID and formatted title with "transcript_" prefix
+**Filename**: Built from video ID and formatted title with "tr_" prefix
 
 **Code Reference**: `src/services/LinkManager.js` - `createLink()`
 
 ```javascript
 async function createLink(videoId, formattedTitle) {
-  const filename = `transcript_${videoId}_${formattedTitle}.md`;
+  const filename = `tr_${videoId}_${formattedTitle}.md`;
   const sourcePath = path.join(
     this.pathResolver.getTranscriptsPath(),
     filename
@@ -1107,7 +1107,7 @@ async function createLink(videoId, formattedTitle) {
 
 ### Overwrite Behavior
 
-If a link already exists at `./transcripts/transcript_{videoId}_{formattedTitle}.md`, it is overwritten:
+If a link already exists at `./transcripts/tr_{videoId}_{formattedTitle}.md`, it is overwritten:
 
 **Reason**: Ensures link points to correct source even if source path changed
 
@@ -1283,9 +1283,9 @@ Each processed video returns a result object:
 
 **State**:
 
-- Transcript file exists: `~/.transcriptor/transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✓
+- Transcript file exists: `~/.transcriptor/transcripts/tr_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✓
 - Registry entry missing: `data.json` has no entry for `dQw4w9WgXcQ` ✗
-- Link not created: `./transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✗
+- Link not created: `./transcripts/tr_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✗
 
 **Recovery on Re-run**:
 
@@ -1304,10 +1304,10 @@ Each processed video returns a result object:
 
 **State**:
 
-- Transcript file exists: `~/.transcriptor/transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✓
+- Transcript file exists: `~/.transcriptor/transcripts/tr_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✓
 - Registry temp file exists: `~/.transcriptor/data.json.tmp` (partial/complete)
 - Registry final file: `~/.transcriptor/data.json` (old state, no new entry)
-- Link not created: `./transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✗
+- Link not created: `./transcripts/tr_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✗
 
 **Recovery on Re-run**:
 
@@ -1324,9 +1324,9 @@ Each processed video returns a result object:
 
 **State**:
 
-- Transcript file exists: `~/.transcriptor/transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✓
+- Transcript file exists: `~/.transcriptor/transcripts/tr_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✓
 - Registry entry exists: With `date_added`, `channel`, and `title` ✓
-- Link exists: `./transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✓
+- Link exists: `./transcripts/tr_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✓
 
 **Recovery on Re-run**:
 
