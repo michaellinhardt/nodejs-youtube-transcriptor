@@ -12,7 +12,7 @@ const pathResolver = require('../utils/pathResolver');
 /**
  * Process Command Handler
  *
- * Implements FR-8.1 main command, TR-1 processing pipeline
+ * Implements FR-8.1 main command, TR-1 processing pipeline, FR-12 RAG generator integration
  *
  * Workflow:
  * 1. Validate youtube.md exists (FR-1.2)
@@ -20,6 +20,7 @@ const pathResolver = require('../utils/pathResolver');
  * 3. Deduplicate URLs (business logic)
  * 4. Delegate to TranscriptService.processBatch()
  * 5. Report results
+ * 6. Execute RAG generator if --rag-generator flag provided (FR-12.2)
  *
  * Security considerations (TR-13, Security):
  * - Validate file size before reading (max 10MB)
@@ -27,9 +28,12 @@ const pathResolver = require('../utils/pathResolver');
  * - Use absolute paths to prevent traversal attacks
  * - Validate video ID format before processing
  *
+ * @param {Object} options - Command options from CLI
+ * @param {boolean} options.ragGenerator - Execute RAG generator after processing
  * @returns {Promise<Object>} Result object with success status
  */
-async function processCommand() {
+async function processCommand(options = {}) {
+  const { ragGenerator = false } = options;
   try {
     console.log('\n=== Processing YouTube Transcripts ===\n');
 
@@ -123,6 +127,39 @@ async function processCommand() {
 
     // Step 4: Display results
     displayResults(results, uniqueUrls.length);
+
+    // Step 5: Execute RAG generator if requested (implements FR-12.2, TR-41)
+    if (ragGenerator && results.processed > 0) {
+      try {
+        console.log('\n[RAG-GENERATOR] Executing RAG generator in ./transcripts...');
+
+        const RAGExecutor = require('../utils/RAGExecutor');
+        const ragResult = await RAGExecutor.execute(process.cwd());
+
+        if (ragResult.error) {
+          // TR-40: Non-fatal error logging
+          console.error(`[RAG-GENERATOR] Error: ${ragResult.error}`);
+
+          // Provide installation hint for common error
+          if (ragResult.error.includes('not found')) {
+            console.error(
+              '[RAG-GENERATOR] Hint: Install with: npm install -g @anthropic-ai/claude-code'
+            );
+          }
+        } else if (ragResult.exitCode === 0) {
+          console.log('[RAG-GENERATOR] Completed successfully');
+        } else if (ragResult.exitCode !== null) {
+          console.warn(`[RAG-GENERATOR] Process exited with code ${ragResult.exitCode}`);
+          console.warn('[RAG-GENERATOR] Check ./transcripts directory for partial output');
+        }
+
+        // TR-42: Add RAG status to results object
+        results.ragGenerator = ragResult;
+      } catch (error) {
+        // TR-40: Catch any unexpected errors, log and continue
+        console.error(`[RAG-GENERATOR] Unexpected error: ${error.message}`);
+      }
+    }
 
     return { success: true, results };
   } catch (error) {

@@ -173,6 +173,31 @@ FR-8.1: `transcriptor` - Process youtube.md file
 FR-8.2: `transcriptor help` - Display usage information
 FR-8.3: `transcriptor data` - Show repository statistics
 FR-8.4: `transcriptor clean YYYY-MM-DD` - Remove old transcripts
+FR-8.5: `transcriptor --rag-generator` - Process youtube.md file with RAG generator execution
+
+## RAG Generator Integration
+
+### FR-12: Automated RAG Processing
+
+FR-12.1: System shall support RAG generator activation via CLI argument
+
+- Argument: `--rag-generator`
+- Behavior: Activates automated RAG processing after transcript completion
+- Applicability: Optional feature, disabled by default
+
+FR-12.2: System shall execute RAG generator after successful processing
+
+- Trigger: All transcripts from youtube.md processed successfully
+- Execution context: ./transcripts directory
+- Command: `claude --dangerously-skip-permissions -p /rag-generator`
+- Timing: Executes only after main transcript processing completes
+
+FR-12.3: RAG generator execution constraints
+
+- Condition: Only executes if all transcript processing succeeds
+- Context: Command runs within ./transcripts folder
+- Purpose: Enables automated Retrieval-Augmented Generation processing of fetched transcripts
+- Failure handling: If RAG command fails, system logs error but does not fail transcript processing
 
 ## Data Integrity
 

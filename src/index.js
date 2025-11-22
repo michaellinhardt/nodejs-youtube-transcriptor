@@ -41,7 +41,8 @@ program
   .description('YouTube transcript extraction and management tool')
   .version(version)
   .option('-q, --quiet', 'Suppress all output except errors')
-  .option('-v, --verbose', 'Show detailed operation logs');
+  .option('-v, --verbose', 'Show detailed operation logs')
+  .option('--rag-generator', 'Execute RAG generator after processing transcripts');
 
 /**
  * Setup verbosity based on command line flags
@@ -70,7 +71,7 @@ function setupVerbosity() {
  */
 function setupCommands() {
   // Default action: process youtube.md file in current directory
-  // Implements FR-8.1, TR-1
+  // Implements FR-8.1, TR-1, FR-12.1 (RAG generator integration)
   program.action(
     asyncHandler(async () => {
       let processCommand;
@@ -79,7 +80,8 @@ function setupCommands() {
       } catch (error) {
         throw new Error(`Failed to load process command: ${error.message}`);
       }
-      await processCommand();
+      const opts = program.opts();
+      await processCommand(opts);
     })
   );
 

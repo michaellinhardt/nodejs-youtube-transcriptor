@@ -822,3 +822,233 @@ RetryMetadataOnUnknownTitle:
     - Transcript fetched in parallel, metadata retry independent
     - Nonfatal: continues processing even after retries exhausted
 ```
+
+## RAG Generator Integration
+
+### TR-35: RAG Generator CLI Option (implements FR-12.1)
+
+```yaml
+RAGGeneratorOption:
+  flag: --rag-generator
+  type: boolean
+  default: false
+  scope: main_command
+  parsing:
+    library: commander
+    method: .option('--rag-generator', 'Execute RAG generator after processing')
+  behavior: optional|feature_disabled_by_default
+  access: transcriptor --rag-generator
+  compatibility: works_with_help, data, clean commands (ignored for non-process operations)
+```
+
+### TR-36: Command-Line Argument Parsing (implements FR-12.1, FR-8.5)
+
+```yaml
+CLIArgumentParsing:
+  framework: commander
+  entry: bin/transcriptor
+  commands:
+    main:
+      name: transcriptor
+      options:
+        - name: --rag-generator
+          description: "Execute RAG generator after processing youtube.md"
+          type: boolean
+          default: false
+    help:
+      name: help
+      inheritance: no_flags
+    data:
+      name: data
+      inheritance: no_flags
+    clean:
+      name: clean
+      args: [date]
+      inheritance: no_flags
+  parsing_flow:
+    - commander.parse(process.argv)
+    - extract_flags_to_options_object
+    - pass_to_command_handler
+  flag_access:
+    processor: cmd.ragGenerator || false
+    availability: after_command_parse
+```
+
+### TR-37: RAG Generator Process Execution (implements FR-12.2)
+
+```yaml
+ExecuteRAGGenerator:
+  timing: after_all_transcripts_processed_successfully
+  trigger:
+    - all_urls_from_youtube.md completed
+    - no_fatal_processing_errors
+    - --rag-generator_flag_true
+  execution_context:
+    cwd: ./transcripts # local project transcripts directory
+    command: claude --dangerously-skip-permissions -p /rag-generator
+  method: child_process.spawn
+  spawn_options:
+    stdio: inherit # output directly to console
+    shell: true # allows shell syntax parsing
+  error_isolation: nonfatal # RAG failure does not fail transcript processing
+```
+
+### TR-38: Process Spawn Implementation (implements FR-12.2)
+
+```yaml
+SpawnRAGProcess:
+  module: child_process.spawn
+  invocation: spawn(command, args, options)
+  command_structure:
+    executable: 'claude'
+    arguments: ['--dangerously-skip-permissions', '-p', '/rag-generator']
+    shell_context: true
+  options_config:
+    cwd: path.resolve('./transcripts')
+    stdio: 'inherit'
+    shell: true
+    env: process.env # pass environment variables
+  event_handling:
+    close: event_handler(code, signal)
+    error: event_handler(err)
+    exit: event_handler(code, signal)
+```
+
+### TR-39: Working Directory Configuration (implements FR-12.2)
+
+```yaml
+WorkingDirectorySetup:
+  requirement: execute_in_local_transcripts_folder
+  path: path.resolve('./transcripts')
+  validation:
+    - check_exists: fs.existsSync(transcriptsDir)
+    - action_missing: create_directory (ensureDir from fs-extra)
+  spawn_option: cwd
+  rationale: RAG generator processes files in current directory
+```
+
+### TR-40: RAG Generator Error Handling (implements FR-12.3)
+
+```yaml
+RAGGeneratorErrorHandling:
+  severity: nonfatal
+  condition: RAG_command_execution_failure
+  behavior:
+    - log_error: console.error with command details
+    - continue_processing: do_not_exit_or_fail
+  error_categories:
+    command_not_found:
+      trigger: ENOENT or command not found in PATH
+      message: "Error: 'claude' command not found. Ensure claude-code is installed and accessible."
+      action: log_and_continue
+    permission_denied:
+      trigger: EACCES
+      message: "Error: Permission denied executing RAG generator command"
+      action: log_and_continue
+    spawn_error:
+      trigger: spawn() throws
+      message: "Error spawning RAG generator: {error_details}"
+      action: log_and_continue
+    process_exit_nonzero:
+      trigger: code != 0
+      message: "RAG generator exited with code: {code}"
+      action: log_warning_and_continue
+  logging:
+    format: "[RAG-GENERATOR] {message}"
+    level: error|warning
+    include: error_message, exit_code, signal
+  failure_recovery: none # No retry
+```
+
+### TR-41: Integration Point in Processing Workflow (implements FR-12.1, FR-12.2)
+
+```yaml
+RAGIntegrationPoint:
+  location: src/commands/process.js
+  phase: after_processBatch_completes
+  decision_gate:
+    condition_1: result.errors.length == 0 || some_transcripts_succeeded
+    condition_2: options.ragGenerator == true
+  flow:
+    1_process_all_urls: transcriptService.processBatch(urls)
+    2_collect_results: get result object with stats
+    3_check_rag_flag: if(options.ragGenerator && has_any_success)
+    4_ensure_dir: ensureDir('./transcripts')
+    5_spawn_process: executeRAGGenerator()
+    6_handle_result: catch errors, log, continue
+    7_summary_output: display final summary
+  success_conditions:
+    - transcripts_processed: result.successful > 0
+    - rag_execution: exit_code_received
+  failure_modes:
+    - rag_not_installed: log_error, continue
+    - rag_fails: exit_code != 0, log_error, continue
+    - missing_transcripts_dir: create_directory, continue
+```
+
+### TR-42: Process State Management (implements FR-12.2)
+
+```yaml
+ProcessStateTracking:
+  result_object:
+    structure:
+      successful: number # URLs processed successfully
+      failed: number # URLs that failed
+      cached: number # URLs retrieved from cache
+      errors: [error_objects]
+      ragGenerator:
+        executed: boolean # was RAG generator attempted
+        exitCode: number|null
+        error: string|null
+  rag_execution_tracking:
+    spawn_callback:
+      - close_event: code, signal
+      - error_event: error_object
+    return_promise:
+      - resolve: once_process_closes
+      - reject: never (error_caught)
+  console_output:
+    pre_rag: summary_of_transcript_results
+    rag_start: "Executing RAG generator in ./transcripts..."
+    rag_success: "RAG generator completed with code {code}"
+    rag_error: "RAG generator failed: {error}"
+```
+
+### TR-43: CLI Command Definition Update (implements FR-8.5)
+
+```yaml
+UpdateCommandDefinition:
+  file: bin/transcriptor
+  section: main_command_definition
+  changes:
+    - add_option: .option('--rag-generator', 'Enable RAG generator after processing')
+    - update_handler: export_action_with_options_object
+    - pass_ragGenerator: propagate_to_process_command
+  signature:
+    before: transcriptor [options] [args]
+    after: transcriptor [--rag-generator] [options] [args]
+  usage_examples:
+    basic: "transcriptor --rag-generator"
+    with_help: "transcriptor --help"
+    data_unaffected: "transcriptor data"
+    clean_unaffected: "transcriptor clean 2025-11-22"
+```
+
+### TR-44: Environment and Logging (implements FR-12.3)
+
+```yaml
+EnvironmentLogging:
+  log_location: console (stdio inherit during RAG execution)
+  log_format:
+    transcript_phase: "[TRANSCRIPTOR] {message}"
+    rag_phase: "[RAG-GENERATOR] {message}"
+  environment_pass_through:
+    variables: all (process.env)
+    claude_permissions: --dangerously-skip-permissions (handles permission checks)
+  output_handling:
+    inherit_mode: child process outputs directly to stdout/stderr
+    capture_mode: not_used (outputs to terminal)
+  exit_behavior:
+    transcript_error: process_continues_for_other_urls
+    rag_error: process_exits_with_summary (RAG failure does_not_exit)
+```

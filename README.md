@@ -172,7 +172,7 @@ All commands support verbosity flags:
 **Syntax:**
 
 ```bash
-transcriptor [--quiet|--verbose]
+transcriptor [--quiet|--verbose] [--rag-generator]
 ```
 
 **Prerequisites:**
@@ -237,6 +237,44 @@ Result: `./transcripts/` folder created with symbolic links pointing to centrali
 https://www.youtube.com/watch?v=VIDEO_ID
 https://youtu.be/VIDEO_ID
 https://www.youtube.com/watch?v=VIDEO_ID&other_params
+```
+
+**RAG Generator Integration:**
+
+Transcriptor can automatically execute RAG (Retrieval-Augmented Generation) processing on fetched transcripts using the `--rag-generator` flag:
+
+```bash
+# Process transcripts and run RAG generator
+transcriptor --rag-generator
+```
+
+**How it works:**
+
+1. Transcripts are fetched/cached normally
+2. If at least one transcript was processed successfully, the RAG generator executes
+3. The command `claude --dangerously-skip-permissions -p /rag-generator` runs in `./transcripts` directory
+4. RAG output appears directly in your console
+
+**Requirements:**
+
+- Claude Code CLI must be installed: `npm install -g @anthropic-ai/claude-code`
+- RAG generator slash command must exist: `/rag-generator`
+
+**Error handling:**
+
+If the RAG generator fails, transcript processing is not affected. Errors are logged but do not prevent transcripts from being saved. Common errors:
+
+- "Command not found" - Install claude-code CLI
+- "Exit code N" - RAG processing failed, check output for details
+
+**Combining with other flags:**
+
+```bash
+# Verbose output with RAG
+transcriptor --verbose --rag-generator
+
+# Quiet mode with RAG (only shows RAG output and errors)
+transcriptor --quiet --rag-generator
 ```
 
 ### Help Command

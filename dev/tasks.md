@@ -435,3 +435,54 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform), 10.
   - [x] 12.2.3 Test with transcriptor clean and re-run to trigger API errors
   - [x] 12.2.4 Verify successful title fetch after retries
   - [x] 12.2.5 Verify unknown_title saved if all retries fail
+
+## 13.0 RAG Generator Integration Feature
+
+<!-- Estimated: 12 hours total | Depends on: 6.0 | Implements FR-12, TR-35 through TR-44 -->
+
+- [x] 13.1 CLI argument parsing implementation (implements FR-12.1, TR-35, TR-36, TR-43)
+  - [x] 13.1.1 Update bin/transcriptor to add --rag-generator option to commander configuration
+  - [x] 13.1.2 Define --rag-generator flag as boolean with default false
+  - [x] 13.1.3 Add description text: "Execute RAG generator after processing youtube.md"
+  - [x] 13.1.4 Extract ragGenerator flag from command options object
+  - [x] 13.1.5 Pass ragGenerator option to process command handler
+  - [ ] 13.1.6 Verify help text displays --rag-generator option (transcriptor --help)
+  - [ ] 13.1.7 Ensure flag is ignored for non-process commands (help, data, clean)
+- [x] 13.2 RAG process execution implementation (implements FR-12.2, TR-37, TR-38, TR-39)
+  - [x] 13.2.1 Create RAGExecutor utility class in src/utils/RAGExecutor.js
+  - [x] 13.2.2 Implement executeRAGGenerator method using child_process.spawn
+  - [x] 13.2.3 Configure spawn with command: 'claude', args: ['--dangerously-skip-permissions', '-p', '/rag-generator']
+  - [x] 13.2.4 Set cwd option to path.resolve('./transcripts') for local execution context
+  - [x] 13.2.5 Set stdio: 'inherit' for direct console output
+  - [x] 13.2.6 Set shell: true for shell context parsing
+  - [x] 13.2.7 Pass through process.env for environment variables
+  - [x] 13.2.8 Implement Promise-based return with close event handler
+  - [x] 13.2.9 Return object with executed, exitCode, and error fields
+- [x] 13.3 Integration with processing workflow (implements FR-12.2, FR-12.3, TR-41, TR-42)
+  - [x] 13.3.1 Update src/commands/process.js to accept ragGenerator option
+  - [x] 13.3.2 Check if ragGenerator flag is true after processBatch completes
+  - [x] 13.3.3 Verify at least some transcripts processed successfully (result.successful > 0)
+  - [x] 13.3.4 Ensure ./transcripts directory exists before RAG execution (using ensureDir)
+  - [x] 13.3.5 Call RAGExecutor.executeRAGGenerator() when conditions met
+  - [x] 13.3.6 Update result object with ragGenerator execution status
+  - [x] 13.3.7 Display execution status in console output ("Executing RAG generator in ./transcripts...")
+- [x] 13.4 Error handling and logging (implements FR-12.3, TR-40, TR-44)
+  - [x] 13.4.1 Wrap RAG execution in try-catch for spawn errors
+  - [x] 13.4.2 Handle ENOENT error (command not found) with descriptive message
+  - [x] 13.4.3 Handle EACCES error (permission denied) with descriptive message
+  - [x] 13.4.4 Handle spawn() exceptions with error details
+  - [x] 13.4.5 Log all errors with [RAG-GENERATOR] prefix
+  - [x] 13.4.6 Ensure RAG failures are non-fatal (do not exit process)
+  - [x] 13.4.7 Continue execution after RAG error, display final summary
+  - [x] 13.4.8 Log exit code and signal if RAG process exits non-zero
+- [x] 13.5 Documentation and verification (implements FR-8.5, TR-44)
+  - [x] 13.5.1 Update README.md with --rag-generator flag documentation
+  - [x] 13.5.2 Add usage example: "transcriptor --rag-generator"
+  - [x] 13.5.3 Explain RAG generator functionality and purpose
+  - [x] 13.5.4 Document error handling behavior (non-fatal failures)
+  - [ ] 13.5.5 Test --rag-generator flag with valid youtube.md file
+  - [ ] 13.5.6 Test --rag-generator with no transcripts processed (verify not executed)
+  - [ ] 13.5.7 Test help text includes --rag-generator option
+  - [ ] 13.5.8 Test help, data, clean commands ignore --rag-generator flag
+  - [ ] 13.5.9 Verify RAG process runs in ./transcripts directory context
+  - [ ] 13.5.10 Test RAG error handling when claude command not installed
