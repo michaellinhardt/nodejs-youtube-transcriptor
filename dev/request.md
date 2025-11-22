@@ -1,45 +1,55 @@
 # Request
 
-We are going to add a feature to collect the youtube video title each time we collect a transcript. It will lead to few changes to integrate this new data.
+We are going to modify the script behavior.
 
 ## Feature changes
 
- When collecting a transcript, the script will also collect the video title by using the prototyped method in the file ./youtube_title_apifree.js
+### data.json
 
-You will add an utils function that convert the youtube title into lowercase, replace space by an `_` and remove all character which are not num or alphabetic. Except for dash `-`.
+The object for one video will now be as follow:
 
-You will add a function that build a short youtube URL based on a youtube ID. This will help to standardize the youtube url that we will now save.
+```json
+  "F-m4AIU8blY": {
+    "date_added": "251119THHMM", // CHANGE FORMAT(YYMMDDTHHMM), ADD TIME 
+    "channel": "...", // FORMATED WITH SAME FUNCTION FOR TITLE
+    "title": "...", // NOW THE FORMATED VERSION
+  }
+```
 
-The file name will be named as follow: `{youtubeID}_{formated_name}.md`.
+- The channel will be formated with the same function to format title.
+- The title is saved in its formated version
+- The date_added format is changed
+- The array with path to links is removed
 
-The file content will be formatted as follow:
+### transcripts files
 
-```file-content
+Inside the folder `transcripts` where is summoned the command transcriptor, as well as inside the `transcripts` folder in `~/.transcriptor` the transcripts files are now going to be named as follow `transcript_{youtubeID}_title.md` ( title is the formatted version )
+
+### Cleaning routine
+
+- It does not delete linked file anymore since we removed the array.
+- The input date is the same but it use the new date format in date_added to detect the file and it ignore the time parameter.
+
+#### Transcript files
+
+Few changes in information session.
+
+- Channel is the formatted version
+- Title is the formatted version
+
+```transcript file
 # Transcript
 
 ## Information
 
-Channel: {youtube channel (author)}
-Title: {original_title}
+Channel: {channel} ( formatted version )
+Title: {title} ( formatted version )
 Youtube ID: {youtube ID}
 URL: {short youtube URL}
 
 ## Content
 
 [The transcript]
-```
-
-Inside the centralized data.json where saving all files information, we will now have:
-
-```json
-  "F-m4AIU8blY": {
-    "date_added": "2025-11-19",
-    "channel": "..."
-    "title": "..." (original title)
-    "links": [
-      "..."
-    ]
-  }
 ```
 
 ## Integration Workflow
@@ -55,6 +65,8 @@ You will proceed in the very specific order, one agent at a time to ensure coher
 3) Technical Requirements
 4) Tasks
 5) Any other files in the docs folder
+
+Instruct the tasks agent to make all the tasks related to this changes in one single main task ( X.X ) and to use sub-task ( X.X.X ) to properly separate each steps.
 
 ### 2. Plan
 
