@@ -226,72 +226,21 @@ class LinkManager {
   }
 
   /**
-   * Track link in registry after successful creation
-   * Updates registry with absolute link path
-   * Implements FR-3.2 registry schema validation
+   * Track link in registry after successful creation (DEPRECATED in Task 11.4)
+   * UPDATED Task 11.4: Links are no longer tracked in registry - links array removed from schema
+   * Symbolic links are still created in ./transcripts but not tracked in data.json
    *
    * @param {string} videoId - YouTube video identifier
    * @param {string} linkPath - Path to created link
    * @returns {Promise<void>}
-   * @throws {Error} If registry update fails or schema invalid
    * @private
    */
   async _trackLink(videoId, linkPath) {
-    // SECURITY: Validate video ID format before any operations
-    validators.assertValidVideoId(videoId);
-
-    const registry = await this.storage.loadRegistry();
-
-    // Convert to absolute path immediately
+    // UPDATED Task 11.4: Links no longer tracked in registry
+    // Symbolic links are still created in ./transcripts but not tracked in data.json
+    // This method is now a no-op
     const absolutePath = path.resolve(linkPath);
-
-    // Validate absolute path (security - prevent path traversal)
-    if (!path.isAbsolute(absolutePath)) {
-      throw new Error(`Link path must be absolute: ${linkPath}`);
-    }
-
-    // Create entry matching FR-3.2 schema if missing
-    if (!registry[videoId]) {
-      const dateAdded = new Date().toISOString().split('T')[0]; // YYYY-MM-DD per BR-4
-
-      registry[videoId] = {
-        date_added: dateAdded, // FR-3.2 exact key name
-        links: [],
-      };
-    }
-
-    // Validate existing entry structure matches FR-3.2
-    if (!registry[videoId].date_added || !Array.isArray(registry[videoId].links)) {
-      throw new Error(`Registry entry corrupted for ${videoId} - schema violation`);
-    }
-
-    // Validate date_added format matches YYYY-MM-DD (BR-4)
-    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-    if (!datePattern.test(registry[videoId].date_added)) {
-      throw new Error(
-        `Registry entry has invalid date_added format for ${videoId}: ${registry[videoId].date_added}. ` +
-          'Expected YYYY-MM-DD per BR-4'
-      );
-    }
-
-    // Idempotent link addition - add only if not already tracked
-    if (!registry[videoId].links.includes(absolutePath)) {
-      registry[videoId].links.push(absolutePath);
-
-      // Atomic registry save
-      try {
-        await this.storage.saveRegistry(registry);
-        console.log(`[Link] Tracked: ${absolutePath}`);
-      } catch (saveError) {
-        // Critical: Link created but registry update failed
-        throw new Error(
-          `Link created but registry update failed for ${videoId}: ${saveError.message}. ` +
-            'Manual cleanup may be required.'
-        );
-      }
-    } else {
-      console.log(`[Link] Already tracked: ${absolutePath}`);
-    }
+    console.log(`[Link] Created (not tracked in registry): ${absolutePath}`);
   }
 
   /**

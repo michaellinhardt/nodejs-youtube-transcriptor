@@ -56,7 +56,7 @@ TranscriptService:
 MetadataService:
   type: service
   tech: [axios]
-  interfaces: [fetchVideoMetadata, formatTitle, buildShortUrl]
+  interfaces: [fetchVideoMetadata, formatTitle, formatChannel, buildShortUrl]
   dependencies: [none]
 
 StorageService:
@@ -73,17 +73,27 @@ StorageService:
 ```yaml
 DataRegistry:
   videoId:
-    date_added: string|YYYY-MM-DD
-    channel: string|author_name
-    title: string|original_video_title
-    links: array<string>|absolute_paths
+    date_added: string|YYMMDDTHHMM
+    channel: string|formatted_channel_name
+    title: string|formatted_title
 
 RegistryValidation:
-  allowed_keys: [date_added, channel, title, links]
-  date_added: required|string|match(/^\d{4}-\d{2}-\d{2}$/)
+  allowed_keys: [date_added, channel, title]
+  date_added: required|string|match(/^\d{6}T\d{4}$/)
   channel: required|string|min_length(1)
   title: required|string|min_length(1)
-  links: required|array|each(absolute_path)
+
+DateFormat:
+  pattern: YYMMDDTHHMM
+  components:
+    YY: year_2_digits
+    MM: month_2_digits
+    DD: day_2_digits
+    T: literal_separator
+    HH: hour_2_digits
+    MM: minute_2_digits
+  example: "251122T1430" # 2025-11-22 14:30
+  cleanup_matching: use_YYMMDD_only # ignore THHMM
 ```
 
 ### File Structure
@@ -93,7 +103,21 @@ Storage:
   ~/.transcriptor/:
     data.json: registry
     transcripts/:
-      {videoId}_{formattedTitle}.md: content
+      transcript_{videoId}_{formattedTitle}.md: content
+  ./transcripts/:
+    transcript_{videoId}_{formattedTitle}.md: symlink
+
+FileNaming:
+  pattern: "transcript_{videoId}_{formattedTitle}.md"
+  applies_to:
+    - ~/.transcriptor/transcripts/
+    - ./transcripts/
+  components:
+    prefix: "transcript_"
+    videoId: string|11_chars
+    separator: "_"
+    formattedTitle: sanitized_title|max_100_chars
+    extension: ".md"
 ```
 
 ### Transcript File Format
@@ -101,16 +125,23 @@ Storage:
 ```yaml
 TranscriptFile:
   structure:
+    - "# Transcript"
+    - ""
+    - "## Information"
+    - ""
     - metadata_section
-    - blank_line
+    - ""
+    - "## Content"
+    - ""
     - transcript_text
   metadata_section:
-    - "Channel: {channel_name}"
-    - "Title: {original_video_title}"
+    - "Channel: {formatted_channel}"
+    - "Title: {formatted_title}"
     - "Youtube ID: {video_id}"
     - "URL: {standard_short_url}"
-  separator: "\n\n"
   encoding: utf-8
+  channel_display: formatted_version
+  title_display: formatted_version
 ```
 
 ## API Integration
@@ -160,7 +191,7 @@ Process:
   - validateFile() → boolean
   - parseURLs() → videoIds[]
   - forEach(processVideo)
-Output: ./transcripts/*.md
+Output: ./transcripts/transcript_{id}_{formattedTitle}.md
 Error: display_help
 ```
 
@@ -181,14 +212,13 @@ Process:
 Output:
   total: number
   size: string|MB
-  oldest: string|YYYY-MM-DD
-  newest: string|YYYY-MM-DD
+  oldest: string|YYMMDDTHHMM
+  newest: string|YYMMDDTHHMM
   per_entry:
     - videoId: string
-    - channel: string
-    - title: string
-    - date_added: YYYY-MM-DD
-    - link_count: number
+    - channel: string|formatted
+    - title: string|formatted
+    - date_added: YYMMDDTHHMM
 ```
 
 ### TR-4: Clean Command (implements FR-6)
@@ -197,9 +227,20 @@ Output:
 Command: transcriptor clean {date}
 Input: YYYY-MM-DD
 Process:
-  - filterOlder(date, exclusive=true)
+  - convertToYYMMDD(input) → datePrefix
+  - filterByDatePrefix(datePrefix, exclusive=true)
   - forEach(removeEntry)
 Output: deleted_count
+DateMatching:
+  input_format: YYYY-MM-DD
+  convert_to: YYMMDD
+  match_against: first_6_chars_of_date_added
+  ignore_time: true # THHMM portion
+  example:
+    input: "2025-11-22"
+    converted: "251122"
+    matches: "251121T1430" # older than boundary
+    excludes: "251122T0900" # boundary date excluded
 ```
 
 ## Processing Algorithms
@@ -238,6 +279,42 @@ ProcessVideo:
     - persistRegistry()
 ```
 
+### TR-30: Date Conversion (implements FR-6.1)
+
+```yaml
+ConvertDateForCleaning:
+  input: YYYY-MM-DD
+  validate: /^\d{4}-\d{2}-\d{2}$/
+  extract:
+    year: substring(2,4) # YY
+    month: substring(5,7) # MM
+    day: substring(8,10) # DD
+  output: YYMMDD
+  usage: prefix_match_on_date_added
+  example:
+    input: "2025-11-22"
+    output: "251122"
+    matches: "251122T1430", "251121T2359"
+    excludes: "251122T0000" # boundary excluded
+```
+
+### TR-31: Date Timestamp Generation (implements FR-3.2)
+
+```yaml
+GenerateDateAdded:
+  trigger: new_transcript
+  format: YYMMDDTHHMM
+  components:
+    - YY: current_year % 100
+    - MM: current_month|zero_pad
+    - DD: current_day|zero_pad
+    - T: literal
+    - HH: current_hour|zero_pad
+    - MM: current_minute|zero_pad
+  example: "251122T1430"
+  precision: minute
+```
+
 ## File Operations
 
 ### TR-8: Atomic Write (implements FR-9.1)
@@ -255,12 +332,12 @@ AtomicWrite:
 
 ```yaml
 CreateLink:
-  source: ~/.transcriptor/transcripts/{id}_{formattedTitle}.md
-  target: ./transcripts/{id}_{formattedTitle}.md
+  source: ~/.transcriptor/transcripts/transcript_{id}_{formattedTitle}.md
+  target: ./transcripts/transcript_{id}_{formattedTitle}.md
   type: symbolic
   force: true
-  track: registry[id].links.push(cwd)
   filename: build_from_registry_metadata
+  naming_consistency: same_pattern_both_locations
 ```
 
 ## Path Management
@@ -278,11 +355,14 @@ PathResolver:
 
 ## Utility Functions
 
-### TR-26: Title Sanitization (implements FR-2.5)
+### TR-26: Title/Channel Sanitization (implements FR-2.5)
 
 ```yaml
-SanitizeTitle:
-  input: title_string
+SanitizeText:
+  applies_to:
+    - video_title
+    - channel_name
+  input: text_string
   operations:
     - trim()
     - toLowerCase()
@@ -297,12 +377,17 @@ SanitizeTitle:
   validation:
     output_pattern: /^[a-z0-9][a-z0-9_-]*$/
   examples:
+    - in: "TechLinked Channel"
+      out: "techlinked_channel"
     - in: "How to Build REST APIs"
       out: "how_to_build_rest_apis"
     - in: "C++ Programming Tutorial #1"
       out: "c_programming_tutorial_1"
-    - in: "   Multiple    Spaces   "
-      out: "multiple_spaces"
+  storage:
+    registry_channel: formatted_version
+    registry_title: formatted_version
+    file_header_channel: formatted_version
+    file_header_title: formatted_version
 ```
 
 ### TR-27: Metadata Header Builder (implements FR-11)
@@ -310,17 +395,24 @@ SanitizeTitle:
 ```yaml
 BuildMetadataHeader:
   input:
-    channel: string
-    title: string
+    channel: string|formatted
+    title: string|formatted
     videoId: string
   template: |
-    Channel: {channel}
-    Title: {title}
+    # Transcript
+
+    ## Information
+
+    Channel: {formatted_channel}
+    Title: {formatted_title}
     Youtube ID: {videoId}
     URL: https://youtu.be/{videoId}
+
+    ## Content
+
   validation:
     no_null_fields: true
-    preserve_original_title: true
+    use_formatted_versions: true
   output: string|multiline
 ```
 
@@ -398,7 +490,6 @@ ValidateIntegrity:
     - registry_entry → file_exists
     - if(!exists): removeEntry()
   cleanup:
-    - delete_links(entry.links)
     - delete_file(transcript)
     - remove_registry_entry
     - save_registry()
@@ -415,10 +506,9 @@ CalculateStats:
   format: humanReadable(bytes → MB)
   per_entry_display:
     - videoId
-    - channel
-    - title
-    - date_added
-    - links.length
+    - channel|formatted
+    - title|formatted
+    - date_added|YYMMDDTHHMM
 ```
 
 ## Performance Constraints
@@ -470,21 +560,34 @@ SaveRegistry:
   format: JSON.stringify(data, null, 2)
   method: atomic_write
   backup: none # Immediate write strategy
+  schema:
+    videoId:
+      date_added: YYMMDDTHHMM
+      channel: formatted_string
+      title: formatted_string
 ```
 
 ### TR-17: Transcript Storage (implements FR-2.4, FR-11)
 
 ```yaml
 SaveTranscript:
-  path: ~/.transcriptor/transcripts/{id}_{formattedTitle}.md
-  content: metadata_header + "\n\n" + transcript_text
+  path: ~/.transcriptor/transcripts/transcript_{id}_{formattedTitle}.md
+  content: full_markdown_structure
   format: markdown
   encoding: utf-8
-  metadata_header:
-    - "Channel: {metadata.channel}"
-    - "Title: {metadata.title}"
+  structure:
+    - "# Transcript"
+    - ""
+    - "## Information"
+    - ""
+    - "Channel: {formatted_channel}"
+    - "Title: {formatted_title}"
     - "Youtube ID: {videoId}"
     - "URL: {buildShortUrl(videoId)}"
+    - ""
+    - "## Content"
+    - ""
+    - transcript_text
 ```
 
 ## Metadata Collection
@@ -502,20 +605,24 @@ FetchMetadata:
   extract:
     channel: response.author_name
     title: response.title
+  format_after_extract:
+    channel: sanitizeText(channel)
+    title: sanitizeText(title)
   fallback:
-    channel: "Unknown Channel"
-    title: "Unknown Title"
+    channel: "unknown_channel"
+    title: "unknown_title"
   error_handling:
     - 400|404: use_fallback, log_warning
     - 500: use_fallback, log_warning
     - timeout: use_fallback, log_warning
 ```
 
-### TR-21: Title Formatting Utility (implements FR-2.5)
+### TR-21: Title/Channel Formatting Utility (implements FR-2.5)
 
 ```yaml
-FormatTitle:
-  input: original_title
+FormatText:
+  applies_to: [title, channel]
+  input: original_text
   algorithm:
     - trim_whitespace
     - convert_to_lowercase
@@ -531,6 +638,7 @@ FormatTitle:
     consecutive_underscores: collapse_to_single
   examples:
     "My Video Title!" → "my_video_title"
+    "TechLinked" → "techlinked"
     "Test  Multiple   Spaces" → "test_multiple_spaces"
     "Special@#$Chars" → "special_chars"
 ```
@@ -556,11 +664,14 @@ BuildFilename:
     title: string
   process:
     - formatted = formatTitle(title)
-    - filename = "{videoId}_{formatted}.md"
+    - filename = "transcript_{videoId}_{formatted}.md"
   validation:
     - total_length < 255 # Filesystem limit
     - no_path_separators
-  output: "{videoId}_{formattedTitle}.md"
+  output: "transcript_{videoId}_{formattedTitle}.md"
+  applies_to:
+    - ~/.transcriptor/transcripts/
+    - ./transcripts/ (symlinks)
 ```
 
 ### TR-24: Registry Update with Metadata (implements FR-3.2)
@@ -570,24 +681,23 @@ UpdateRegistry:
   input:
     videoId: string
     metadata:
-      channel: string
-      title: string
-    linkPath: string
+      channel: string|formatted
+      title: string|formatted
   operation:
     - load_registry
     - update_or_create_entry:
-        date_added: existing || current_date
-        channel: metadata.channel
-        title: metadata.title
-        links: append_unique(linkPath)
+        date_added: existing || generateDateAdded()
+        channel: metadata.channel # formatted
+        title: metadata.title # formatted
     - validate_schema
     - atomic_write
   schema_validation:
-    - required_keys: [date_added, channel, title, links]
-    - date_added: YYYY-MM-DD
-    - channel: non_empty_string
-    - title: non_empty_string
-    - links: array<absolute_path>
+    - required_keys: [date_added, channel, title]
+    - date_added: YYMMDDTHHMM
+    - channel: non_empty_string|formatted
+    - title: non_empty_string|formatted
+  removed_fields:
+    - links # no longer tracked
 ```
 
 ### TR-25: Transcript Processing Workflow (implements FR-2, TR-7)
@@ -603,10 +713,10 @@ ProcessVideoWithMetadata:
         - fetch_transcript_parallel:
             - transcript ← api.fetchTranscript(url)
             - metadata ← api.fetchMetadata(videoId)
-        - format_metadata_header(metadata, videoId)
+        - format_metadata(metadata) # sanitize title and channel
         - build_filename(videoId, metadata.title)
         - save_transcript_with_header(filename, header, transcript)
-        - update_registry(videoId, metadata, currentDir)
+        - update_registry(videoId, metadata)
         - persist_registry
     - create_link(videoId, metadata.title)
   parallel_fetch: true # Transcript + metadata concurrent
@@ -639,4 +749,40 @@ Initialize:
     - data.json: {}
   validate_env:
     - SCRAPE_CREATORS_API_KEY
+```
+
+## Cleanup Operations
+
+### TR-32: Cleanup Date Matching (implements FR-6.1)
+
+```yaml
+CleanupDateMatching:
+  input: YYYY-MM-DD
+  convert: YYMMDD
+  match_logic:
+    - extract_date_prefix: date_added.substring(0,6)
+    - compare: prefix < converted_input
+    - exclude_boundary: prefix != converted_input
+  ignore: THHMM_portion
+  example:
+    input: "2025-11-22"
+    converted: "251122"
+    entry_1: "251121T1430" → DELETE (251121 < 251122)
+    entry_2: "251122T0900" → KEEP (251122 == 251122)
+    entry_3: "251123T1200" → KEEP (251123 > 251122)
+```
+
+### TR-33: File Deletion (implements FR-6.2)
+
+```yaml
+DeleteTranscript:
+  input: videoId, metadata
+  target: transcript_{videoId}_{formattedTitle}.md
+  location: ~/.transcriptor/transcripts/
+  operation:
+    - build_filename(videoId, metadata.title)
+    - delete_file(filename)
+    - remove_registry_entry(videoId)
+    - save_registry()
+  no_link_deletion: links_not_tracked
 ```

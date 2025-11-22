@@ -21,8 +21,10 @@ function isValidVideoId(id) {
 
 /**
  * Validate date string format and calendar validity
+ * UPDATED for Task 11.0: Supports both YYMMDDTHHMM (new) and YYYY-MM-DD (legacy)
  * Per BR-4: YYYY-MM-DD format with valid calendar date
  * Rejects invalid dates like 2024-02-31 (Feb 31st doesn't exist)
+ * CRITICAL: Must support both formats during migration period
  *
  * @param {string} dateString - Date string to validate
  * @returns {boolean} True if valid format and calendar date, false otherwise
@@ -32,41 +34,43 @@ function isValidDate(dateString) {
     return false;
   }
 
-  // Check format and extract components
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString);
-  if (!match) {
+  // BUG FIX: Check length first to prevent unnecessary regex execution
+  if (dateString.length !== 10 && dateString.length !== 11) {
     return false;
   }
 
-  // Parse components
-  const year = parseInt(match[1], 10);
-  const month = parseInt(match[2], 10);
-  const day = parseInt(match[3], 10);
-
-  // Validate ranges
-  if (month < 1 || month > 12) {
-    return false;
-  }
-  if (day < 1 || day > 31) {
-    return false;
+  // NEW: Accept YYMMDDTHHMM format (length 11)
+  if (dateString.length === 11) {
+    const timestampMatch = /^(\d{2})(\d{2})(\d{2})T(\d{2})(\d{2})$/.exec(dateString);
+    if (timestampMatch) {
+      // Delegate to dateUtils for timestamp validation
+      const dateUtils = require('./dateUtils');
+      return dateUtils.isValidTimestamp(dateString);
+    }
+    return false; // Length 11 but doesn't match timestamp pattern
   }
 
-  // Create date and verify no coercion occurred
-  // month is 0-indexed in Date constructor
-  const date = new Date(year, month - 1, day);
+  // OLD: Accept YYYY-MM-DD for backward compatibility during migration (length 10)
+  const legacyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString);
+  if (legacyMatch) {
+    // Extract and validate components
+    const year = parseInt(legacyMatch[1], 10);
+    const month = parseInt(legacyMatch[2], 10);
+    const day = parseInt(legacyMatch[3], 10);
 
-  // If JavaScript coerced the date, components won't match
-  if (date.getFullYear() !== year) {
-    return false;
-  }
-  if (date.getMonth() !== month - 1) {
-    return false;
-  }
-  if (date.getDate() !== day) {
-    return false;
+    // Validate ranges
+    if (year < 2000 || year > 2099) return false;
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+
+    // Validate actual calendar date
+    const date = new Date(year, month - 1, day);
+    if (isNaN(date.getTime())) return false;
+
+    return date.getMonth() === month - 1 && date.getDate() === day;
   }
 
-  return !isNaN(date.getTime());
+  return false;
 }
 
 /**
@@ -105,8 +109,10 @@ function assertValidVideoId(id) {
 /**
  * Assert date string is valid, throwing if not
  * Use in critical paths where invalid dates should halt execution
+ * UPDATED for Task 11.0: Enhanced error message for both formats
  *
  * @param {string} dateString - Date string to validate
+ * @param {string} context - Optional context for error message
  * @throws {Error} If date format invalid or calendar date impossible
  * @returns {void}
  *
@@ -114,10 +120,11 @@ function assertValidVideoId(id) {
  * assertValidDate(dateString); // Throws if invalid
  * cleanOldData(dateString);    // Safe to proceed
  */
-function assertValidDate(dateString) {
+function assertValidDate(dateString, context = 'date') {
   if (!isValidDate(dateString)) {
     throw new Error(
-      `Invalid date format: "${dateString}". ` + 'Expected YYYY-MM-DD with valid calendar date.'
+      `Invalid ${context} format: "${dateString}". ` +
+        'Expected YYMMDDTHHMM (e.g., "251122T1430") or YYYY-MM-DD (legacy)'
     );
   }
 }

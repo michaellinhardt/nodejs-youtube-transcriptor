@@ -37,7 +37,10 @@ class MetadataService {
     // CRITICAL: Validate videoId format first (prevent API abuse)
     if (!videoId || videoId.length !== VIDEO_ID_LENGTH || !VIDEO_ID_PATTERN.test(videoId)) {
       console.warn(`[MetadataService] Invalid video ID: ${videoId}`);
-      return { channel: this.FALLBACK_CHANNEL, title: this.FALLBACK_TITLE };
+      return {
+        channel: this.formatChannel(this.FALLBACK_CHANNEL),
+        title: this.formatTitle(this.FALLBACK_TITLE),
+      };
     }
 
     // Retry loop for 503 errors
@@ -58,7 +61,11 @@ class MetadataService {
         // CRITICAL: Validate no path separators or control characters
         const validatedMetadata = this.validateMetadata({ channel, title });
 
-        return validatedMetadata;
+        // CRITICAL: Format BOTH channel and title before returning (Task 11.2)
+        return {
+          channel: this.formatChannel(validatedMetadata.channel),
+          title: this.formatTitle(validatedMetadata.title),
+        };
       } catch (error) {
         // Handle retries for 503 only
         if (error.response?.status === 503 && attempt < this.MAX_RETRIES - 1) {
@@ -70,14 +77,20 @@ class MetadataService {
           continue;
         }
 
-        // Log error with context and return fallback
+        // Log error with context and return formatted fallback (Task 11.2)
         this.logMetadataError(videoId, error);
-        return { channel: this.FALLBACK_CHANNEL, title: this.FALLBACK_TITLE };
+        return {
+          channel: this.formatChannel(this.FALLBACK_CHANNEL),
+          title: this.formatTitle(this.FALLBACK_TITLE),
+        };
       }
     }
 
-    // All retries exhausted
-    return { channel: this.FALLBACK_CHANNEL, title: this.FALLBACK_TITLE };
+    // All retries exhausted - return formatted fallback values (Task 11.2)
+    return {
+      channel: this.formatChannel(this.FALLBACK_CHANNEL),
+      title: this.formatTitle(this.FALLBACK_TITLE),
+    };
   }
 
   /**
@@ -173,6 +186,33 @@ class MetadataService {
     // Final guard: Empty result means all characters were invalid
     if (formatted === '') {
       return 'untitled';
+    }
+
+    return formatted;
+  }
+
+  /**
+   * Format channel name for filesystem safety
+   * Uses same algorithm as formatTitle per FR-2.5
+   * Implements Task 11.2 channel formatting requirement
+   * BUG FIX: Added null/undefined guard and empty string validation
+   *
+   * @param {string} channel - Original channel name
+   * @returns {string} Sanitized channel name (lowercase, underscores, alphanumeric+dash only)
+   */
+  formatChannel(channel) {
+    // BUG FIX: Guard against null/undefined inputs
+    if (!channel || typeof channel !== 'string') {
+      console.warn('[MetadataService] Invalid channel input for formatting');
+      return 'unknown_channel';
+    }
+
+    // Reuse formatTitle implementation (identical sanitization)
+    const formatted = this.formatTitle(channel);
+
+    // BUG FIX: Ensure non-empty result (formatTitle may return empty string)
+    if (!formatted || formatted.trim() === '') {
+      return 'unknown_channel';
     }
 
     return formatted;

@@ -411,7 +411,6 @@ class TranscriptService {
   constructor(storageService, apiClient, pathResolver) {
     this.storage = storageService;
     this.api = apiClient; // APIClient dependency
-    this.linkManager = new LinkManager(storageService, pathResolver);
   }
 
   async processVideo(videoId, url) {
@@ -426,9 +425,6 @@ class TranscriptService {
 
     // 3. Save immediately (crash resilience)
     await this.storage.saveTranscript(videoId, transcript);
-
-    // 4. Create symbolic link
-    await this.linkManager.createLink(videoId);
 
     return transcript;
   }
@@ -901,27 +897,39 @@ The fetched title is used to generate descriptive filenames:
 - Input: `"How to Build REST APIs - Complete Tutorial"`
 - Process: Lowercase → replace spaces → sanitize → truncate
 - Output: `"how_to_build_rest_apis_complete_tutorial"`
-- Filename: `"dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"`
+- Filename: `"transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"`
 
-**Fallback Filename**: If title is "Unknown Title", format as `"{videoId}_unknown_title.md"`
+**Filename Pattern**: `transcript_{youtubeID}_{formatted_title}.md`
+
+**Fallback Filename**: If title is "Unknown Title", format as `"transcript_{videoId}_unknown_title.md"`
+
+**File Locations**: The same naming pattern is applied to both storage locations:
+- Project directory: `./transcripts/transcript_{youtubeID}_{formatted_title}.md`
+- Global registry: `~/.transcriptor/transcripts/transcript_{youtubeID}_{formatted_title}.md`
 
 ### Integration with File Content
 
-The fetched metadata populates a header section in each transcript file:
+The fetched metadata populates a structured markdown header in each transcript file:
 
-**Metadata Header Template**:
-```
-Channel: JavaScript Mastery
-Title: How to Build REST APIs - Complete Tutorial
-Youtube ID: dQw4w9WgXcQ
-URL: https://youtu.be/dQw4w9WgXcQ
+**Transcript File Structure**:
+```markdown
+# Transcript
+
+## Information
+
+- **Channel**: javascript_mastery
+- **Title**: how_to_build_rest_apis_complete_tutorial
+- **Youtube ID**: dQw4w9WgXcQ
+- **URL**: https://youtu.be/dQw4w9WgXcQ
+
+## Content
 
 [Transcript content follows...]
 ```
 
 **Field Descriptions**:
-- `Channel`: From `author_name` field (or "Unknown Channel")
-- `Title`: From `title` field - **original unmodified** (or "Unknown Title")
+- `Channel`: From `author_name` field, sanitized and formatted (or "Unknown Channel")
+- `Title`: From `title` field, sanitized and formatted (or "Unknown Title")
 - `Youtube ID`: Video identifier
 - `URL`: Standardized short URL format
 
@@ -983,9 +991,268 @@ nock('https://www.youtube.com')
   .reply(404, { error: 'Not Found' });
 ```
 
+## Registry Data Schema (data.json)
+
+The application maintains a global registry at `~/.transcriptor/data.json` that tracks all processed videos and their metadata. This registry is updated after each successful transcript download and is used for caching, cleanup operations, and cross-session state management.
+
+### Registry File Location
+
+**Path**: `~/.transcriptor/data.json`
+**Format**: JSON
+**Encoding**: UTF-8
+**Access Pattern**: Read at startup, write after each video processed
+
+### Schema Structure
+
+The registry is a JSON object with a single top-level array:
+
+```json
+{
+  "videos": [
+    {
+      "youtubeId": "dQw4w9WgXcQ",
+      "channel": "javascript_mastery",
+      "title": "how_to_build_rest_apis_complete_tutorial",
+      "date_added": "251122T1430"
+    },
+    {
+      "youtubeId": "xyz789abc123",
+      "channel": "tech_channel",
+      "title": "nodejs_fundamentals_explained",
+      "date_added": "251121T0915"
+    }
+  ]
+}
+```
+
+### Field Specifications
+
+| Field | Type | Required | Format | Description |
+|-------|------|----------|--------|-------------|
+| `youtubeId` | string | Yes | YouTube video ID (11 chars) | Unique identifier for the video |
+| `channel` | string | Yes | Sanitized lowercase | Formatted channel name (sanitized like title) |
+| `title` | string | Yes | Sanitized lowercase | Formatted video title (sanitized) |
+| `date_added` | string | Yes | `YYMMDDTHHMM` | Timestamp when video was added to registry |
+
+### Date Format Details
+
+**Format**: `YYMMDDTHHMM`
+
+**Components**:
+- `YY`: Two-digit year (e.g., `25` for 2025)
+- `MM`: Two-digit month (01-12)
+- `DD`: Two-digit day (01-31)
+- `T`: Literal separator character
+- `HH`: Two-digit hour in 24-hour format (00-23)
+- `MM`: Two-digit minute (00-59)
+
+**Examples**:
+- `251122T1430` = November 22, 2025 at 2:30 PM
+- `251225T0000` = December 25, 2025 at midnight
+- `260101T2359` = January 1, 2026 at 11:59 PM
+
+**Usage in Cleanup Operations**: When matching dates for cleanup, only the `YYMMDD` portion is compared, ignoring the `THHMM` time component.
+
+### Title and Channel Formatting
+
+Both `channel` and `title` fields store **formatted versions** of the metadata:
+
+**Formatting Process** (applied by `src/utils/titleFormatter.js`):
+1. Convert to lowercase
+2. Replace spaces with underscores
+3. Remove special characters (keep alphanumeric, underscores, hyphens)
+4. Truncate to maximum length (default: 100 characters)
+5. Remove leading/trailing underscores
+
+**Examples**:
+
+| Original | Formatted |
+|----------|-----------|
+| "JavaScript Mastery" | "javascript_mastery" |
+| "How to Build REST APIs - Tutorial!" | "how_to_build_rest_apis_tutorial" |
+| "Tech & Code" | "tech_code" |
+| "Unknown Channel" | "unknown_channel" |
+
+**Consistency**: The same formatted values are used in:
+- Registry `channel` and `title` fields
+- Transcript filenames
+- Transcript file content headers
+
+### Schema Changes from Previous Versions
+
+**Removed Fields**:
+- `links` array - No longer tracked in registry (symbolic links removed from system)
+
+**Modified Fields**:
+- `date_added`: Changed from `YYYY-MM-DD` format to `YYMMDDTHHMM` format
+- `channel`: Now stores formatted/sanitized version instead of original
+- `title`: Now stores formatted/sanitized version instead of original
+
+### Registry Update Flow
+
+**When**: After each successful video processing
+
+**Process**:
+1. Fetch transcript and metadata from APIs
+2. Format channel and title using `titleFormatter.js`
+3. Generate timestamp in `YYMMDDTHHMM` format
+4. Create new entry object
+5. Load existing `data.json`
+6. Check for duplicates (by `youtubeId`)
+7. Add new entry to `videos` array (if not duplicate)
+8. Write updated registry back to disk
+
+**Implementation Reference**: `src/services/RegistryService.js` - `addVideoEntry()` method
+
+### Duplicate Prevention
+
+The registry prevents duplicate entries by checking `youtubeId`:
+
+```javascript
+function isDuplicate(youtubeId, existingVideos) {
+  return existingVideos.some(video => video.youtubeId === youtubeId);
+}
+```
+
+If a video is processed multiple times (e.g., user runs tool again with same URL):
+- Registry entry is NOT duplicated
+- Existing entry remains unchanged
+- Transcript file may be overwritten in storage
+
+### Registry Initialization
+
+**First Run**: If `~/.transcriptor/data.json` doesn't exist, it's created with empty structure:
+
+```json
+{
+  "videos": []
+}
+```
+
+**Directory Creation**: If `~/.transcriptor/` directory doesn't exist, it's created automatically with appropriate permissions (755).
+
+### Error Handling
+
+**Registry Write Failures**:
+- Error logged to console
+- Processing continues (non-fatal)
+- Video transcript still saved to disk
+- Retry on next video processing
+
+**Registry Read Failures**:
+- Treated as empty registry
+- New registry file created
+- Warning logged to console
+
+**Corrupted Registry**:
+- JSON parse error handled gracefully
+- Backup created: `data.json.backup.{timestamp}`
+- Fresh registry initialized
+- Error logged with recovery details
+
+### Cleanup Integration
+
+The registry is used by the cleanup routine to identify old transcripts:
+
+**Cleanup Process**:
+1. Read `data.json` registry
+2. Filter entries by date (compare `YYMMDD` portion only)
+3. Identify transcripts older than threshold (e.g., 30 days)
+4. Delete corresponding transcript files
+5. Remove entries from registry
+6. Write updated registry back to disk
+
+**Date Matching Example**:
+
+```javascript
+// Entry: "251122T1430" (Nov 22, 2025 at 2:30 PM)
+// Entry: "251122T0900" (Nov 22, 2025 at 9:00 AM)
+// Both match date "251122" regardless of time
+
+function matchesDate(dateAdded, targetDate) {
+  const entryDate = dateAdded.substring(0, 6); // Extract YYMMDD
+  return entryDate === targetDate;
+}
+```
+
+**Implementation Reference**: `src/services/CleanupService.js` - `cleanOldTranscripts()` method
+
+### Sample Registry File
+
+**Complete Example** (`~/.transcriptor/data.json`):
+
+```json
+{
+  "videos": [
+    {
+      "youtubeId": "dQw4w9WgXcQ",
+      "channel": "javascript_mastery",
+      "title": "how_to_build_rest_apis_complete_tutorial",
+      "date_added": "251122T1430"
+    },
+    {
+      "youtubeId": "abc123xyz789",
+      "channel": "fireship",
+      "title": "nodejs_in_100_seconds",
+      "date_added": "251121T0915"
+    },
+    {
+      "youtubeId": "qwerty12345",
+      "channel": "traversy_media",
+      "title": "javascript_crash_course_for_beginners",
+      "date_added": "251120T1645"
+    },
+    {
+      "youtubeId": "mnbvcx54321",
+      "channel": "unknown_channel",
+      "title": "unknown_title",
+      "date_added": "251119T2130"
+    }
+  ]
+}
+```
+
+**Notes**:
+- Videos sorted by `date_added` (newest first - optional, not enforced)
+- Each entry corresponds to a transcript file: `transcript_{youtubeId}_{title}.md`
+- Fallback values shown in last entry (metadata fetch failed)
+
+### Validation Rules
+
+The registry service validates entries before writing:
+
+**Required Validations**:
+1. `youtubeId` must be non-empty string
+2. `youtubeId` must be exactly 11 characters
+3. `channel` must be non-empty string
+4. `title` must be non-empty string
+5. `date_added` must match `YYMMDDTHHMM` format
+6. No duplicate `youtubeId` values
+
+**Invalid Entry Handling**:
+- Entry rejected with error logged
+- Registry write operation aborted
+- User notified of validation failure
+
+### Migration from Old Format
+
+If upgrading from a previous version with different schema:
+
+**Migration Strategy**:
+1. Detect old format (presence of `links` array or `YYYY-MM-DD` date format)
+2. Create backup: `data.json.pre-migration.backup`
+3. Transform each entry:
+   - Remove `links` field
+   - Convert `date_added` from `YYYY-MM-DD` to `YYMMDDTHHMM` (default time: `T0000`)
+   - Re-format `channel` and `title` fields (if storing original versions)
+4. Write migrated registry
+5. Log migration summary
+
+**Implementation Reference**: `src/services/RegistryMigration.js` - `migrateRegistry()` method
+
 ## References
 
-- **Implementation**: `src/services/APIClient.js`, `src/services/MetadataService.js`
+- **Implementation**: `src/services/APIClient.js`, `src/services/MetadataService.js`, `src/services/RegistryService.js`
 - **Constants**: `src/constants/APIClientConstants.js`
 - **Error Handling**: `src/utils/ErrorHandler.js`
 - **URL Validation**: `src/utils/URLValidator.js`

@@ -41,16 +41,18 @@ FR-2.3: System shall check cache before fetching
 
 FR-2.4: System shall persist transcripts immediately
 
-- Format: {video-id}_{formatted-title}.md file
+- Format: transcript_{video-id}_{formatted-title}.md file
+- Location: Both ~/.transcriptor/transcripts and project ./transcripts directories
 - Content: Metadata section followed by transcript text
 - Timing: Save after each successful fetch
 
-FR-2.5: System shall format video titles for filenames
+FR-2.5: System shall format text for filenames
 
-- Input: Original video title
+- Applied to: Video title AND channel name
 - Transformation: Convert to lowercase, replace spaces with underscore
 - Allowed characters: Alphanumeric, underscore, dash only
-- Output: Sanitized title suitable for filesystem
+- Output: Sanitized text suitable for filesystem
+- Storage: Formatted versions stored in data registry
 
 ## Storage Management
 
@@ -66,13 +68,16 @@ FR-3.2: System shall track transcript metadata
 ```json
 {
   "[video-id]": {
-    "date_added": "YYYY-MM-DD",
-    "channel": "Channel Name",
-    "title": "Original Video Title",
-    "links": ["path1", "path2"]
+    "date_added": "YYMMDDTHHMM",
+    "channel": "formatted_channel_name",
+    "title": "formatted_video_title"
   }
 }
 ```
+
+- date_added format: YY (year) MM (month) DD (day) T (separator) HH (hour) MM (minute)
+- channel: Formatted version using same sanitization as title
+- title: Formatted version suitable for filenames
 
 FR-3.3: System shall generate standardized YouTube URLs
 
@@ -86,32 +91,34 @@ FR-4.1: System shall create project-local access points
 
 - Location: ./transcripts/ folder in current directory
 - Type: Symbolic links to centralized storage
-- Naming: {video-id}_{formatted-title}.md
-
-FR-4.2: System shall track all link locations
-
-- Update: Add path to links array for each creation
-- Purpose: Enable complete cleanup
+- Naming: transcript_{video-id}_{formatted-title}.md
 
 ### FR-11: Transcript File Structure
 
 FR-11.1: System shall structure transcript files with metadata headers
 
-- Section 1: Metadata block containing:
-  - Channel: [channel name]
-  - Title: [original video title]
-  - Youtube ID: [video-id]
-  - URL: [standardized short URL]
-- Section 2: Transcript content (plain text)
-- Separator: Blank line between metadata and transcript
+```markdown
+# Transcript
+
+## Information
+
+Channel: {formatted_channel}
+Title: {formatted_title}
+Youtube ID: {video-id}
+URL: {standardized_short_url}
+
+## Content
+
+[transcript text]
+```
 
 FR-11.2: Metadata presentation requirements
 
-- Format: Key-value pairs, one per line
-- Channel: Display author/creator name
-- Title: Display original unmodified video title
-- Youtube ID: Display unique video identifier
-- URL: Display standardized short URL format
+- Format: Markdown structure with sections
+- Channel: Formatted version (sanitized)
+- Title: Formatted version (sanitized)
+- Youtube ID: Unique video identifier
+- URL: Standardized short URL format (https://youtu.be/{video-id})
 
 ## Maintenance Operations
 
@@ -123,21 +130,21 @@ FR-5.1: Command `transcriptor data` shall display:
 - Storage folder size
 - Oldest transcript date
 - Newest transcript date
-- Per entry: Video ID, channel, title, date added, link count
+- Per entry: Video ID, formatted channel, formatted title, date added (YYMMDDTHHMM format)
 
 ### FR-6: Cleanup Operations
 
 FR-6.1: Command `transcriptor clean YYYY-MM-DD` shall:
 
+- Input format: YYYY-MM-DD
+- Match logic: Compare against date portion (YYMMDD) of date_added, ignore time (THHMM)
 - Remove transcripts older than specified date
-- Delete associated .md files
-- Remove all tracked symbolic links
+- Delete transcript .md files from centralized storage
 - Exclude specified date from deletion
 
 FR-6.2: Cleanup shall process per entry:
 
-- Delete all links for video ID
-- Delete transcript file
+- Delete transcript file from ~/.transcriptor/transcripts
 - Remove registry entry
 - Save updated registry
 
@@ -146,7 +153,7 @@ FR-6.2: Cleanup shall process per entry:
 FR-7.1: System shall validate integrity on each run
 
 - Check: Each registry entry has corresponding file
-- Action: Remove orphaned entries and their links
+- Action: Remove orphaned entries
 - Timing: Before processing new URLs
 
 ## Command Interface
@@ -185,7 +192,6 @@ FR-10.1: System shall continue after individual failures
 
 FR-10.2: System shall handle missing resources
 
-- Missing links: Skip deletion, continue
 - Missing files: Clean registry entry
 - Invalid URLs: Skip, process next
 
@@ -202,14 +208,10 @@ FR-10.2: System shall handle missing resources
 - Complete each operation before next
 - Save immediately after fetch
 
-### BR-3: Link Management
+### BR-3: Date Handling
 
-- Track all created links
-- Remove links when source deleted
-- Maintain bidirectional registry
-
-### BR-4: Date Handling
-
-- Use YYYY-MM-DD format
+- Registry storage format: YYMMDDTHHMM (includes date and time)
+- User input format: YYYY-MM-DD
+- Cleanup matching: Compare date portion only (YYMMDD), ignore time
 - Clean operations exclude boundary date
-- Track first fetch date only
+- Track first fetch timestamp (date and time)

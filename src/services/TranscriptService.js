@@ -219,23 +219,19 @@ class TranscriptService {
       // Load current registry
       const registry = await this.storage.loadRegistry();
 
-      // Get current date in YYYY-MM-DD format (BR-4)
-      const today = new Date();
-      const dateAdded = today.toISOString().split('T')[0]; // YYYY-MM-DD
+      // UPDATED Task 11.1: Use YYMMDDTHHMM format instead of YYYY-MM-DD
+      const { generateDateAdded } = require('../utils/dateUtils');
+      const dateAdded = generateDateAdded();
 
       // Create or update entry
       if (!registry[videoId]) {
-        // New entry - initialize with date, metadata, and empty links array
+        // UPDATED Task 11.4: Removed links array from registry structure
+        // New entry - initialize with date and metadata
         registry[videoId] = {
           date_added: dateAdded,
-          links: [],
+          channel: metadata && metadata.channel ? metadata.channel : '',
+          title: metadata && metadata.title ? metadata.title : '',
         };
-
-        // Add metadata if provided
-        if (metadata && metadata.channel && metadata.title) {
-          registry[videoId].channel = metadata.channel;
-          registry[videoId].title = metadata.title;
-        }
 
         console.log(LOG_MESSAGES.TRANSCRIPT_ENTRY_CREATED(videoId));
       } else {

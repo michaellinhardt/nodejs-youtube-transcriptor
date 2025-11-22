@@ -13,7 +13,7 @@ const RegistryCache = require('./RegistryCache');
  * @class StorageService
  */
 class StorageService {
-  static ALLOWED_ENTRY_KEYS = ['date_added', 'channel', 'title', 'links'];
+  static ALLOWED_ENTRY_KEYS = ['date_added', 'channel', 'title'];
   static REGISTRY_WRITE_OPTIONS = {
     spaces: 2,
     encoding: 'utf8',
@@ -69,6 +69,7 @@ class StorageService {
    * Returns empty object for new installations
    * Validates structure before returning
    * Uses cache for performance on repeated calls
+   * UPDATED Task 11.7: Automatic migration on registry load with 4-phase approach
    *
    * @returns {Promise<Object>} Registry data
    * @throws {Error} If registry corrupted or invalid structure
@@ -86,7 +87,57 @@ class StorageService {
 
     const registryData = await this.readRegistryFile(registryPath);
 
-    // Guard: Reject invalid structure
+    // CRITICAL: Check if migration needed before validation (Task 11.7)
+    const MigrationService = require('./MigrationService');
+    const migrationService = new MigrationService(this, this.paths);
+
+    if (migrationService.needsMigration(registryData)) {
+      console.log('Old registry format detected - migration required');
+
+      let backupPath;
+      try {
+        // PHASE 1: Create backup first (CRITICAL)
+        backupPath = await migrationService.backupRegistry();
+
+        // PHASE 2: Migrate registry entries
+        const migratedData = await migrationService.migrateRegistry(registryData);
+
+        // PHASE 3: CRITICAL VALIDATION before save
+        console.log('Validating migrated registry...');
+        const validationErrors = migrationService.validateMigratedRegistry(migratedData);
+        if (validationErrors.length > 0) {
+          console.error('Migration validation failed:');
+          validationErrors.forEach((err) => console.error(`  - ${err}`));
+          throw new Error(`Migration produced ${validationErrors.length} invalid entries`);
+        }
+
+        // PHASE 4: Save migrated registry atomically
+        await this.saveRegistry(migratedData);
+
+        console.log('Migration complete - registry updated');
+        console.log(`Backup preserved at: ${backupPath}`);
+
+        return migratedData;
+      } catch (migrationError) {
+        console.error('Migration failed:', migrationError.message);
+
+        // CRITICAL: Automatic rollback on failure
+        if (backupPath && (await fs.pathExists(backupPath))) {
+          console.warn('Rolling back to backup...');
+          try {
+            await fs.copy(backupPath, registryPath, { overwrite: true });
+            console.log('Rollback successful - original registry restored');
+          } catch (rollbackError) {
+            console.error('CRITICAL: Rollback failed:', rollbackError.message);
+            console.error(`Manual restore required from: ${backupPath}`);
+          }
+        }
+
+        throw new Error(`Migration failed and rolled back: ${migrationError.message}`);
+      }
+    }
+
+    // Guard: Reject invalid structure (already new format or no migration needed)
     if (!this.isValidRegistryStructure(registryData)) {
       throw new Error('Registry validation: Structure does not match expected schema');
     }
@@ -213,9 +264,7 @@ class StorageService {
     if (!validators.isValidDate(entry.date_added)) {
       return false;
     }
-    if (!this.areLinksValid(entry.links)) {
-      return false;
-    }
+    // REMOVED: links validation (Task 11.4 - field no longer allowed)
     if (!this.hasOnlyAllowedKeys(entry)) {
       return false;
     }
@@ -235,9 +284,8 @@ class StorageService {
     if (!entry.date_added || typeof entry.date_added !== 'string') {
       return false;
     }
-    if (!Array.isArray(entry.links)) {
-      return false;
-    }
+
+    // REMOVED: links field validation (Task 11.4 - field no longer allowed)
 
     // Channel optional (backward compatibility) but must be non-empty string if present
     if (entry.channel !== undefined) {
@@ -275,18 +323,7 @@ class StorageService {
     return entryKeys.every((key) => StorageService.ALLOWED_ENTRY_KEYS.includes(key));
   }
 
-  /**
-   * Validate all links are non-empty absolute paths
-   * @private
-   */
-  areLinksValid(links) {
-    return links.every((link) => {
-      if (typeof link !== 'string' || link.trim() === '') {
-        return false;
-      }
-      return path.isAbsolute(link);
-    });
-  }
+  // REMOVED: areLinksValid method (Task 11.4 - links field no longer in schema)
 
   /**
    * Save registry to data.json with atomic write (implements TR-8, TR-16)
@@ -417,14 +454,15 @@ class StorageService {
   /**
    * Build transcript filename from video ID and metadata
    * CRITICAL: Implements FR-2.4, TR-23 metadata-based naming
+   * UPDATED Task 11.3: Adds transcript_ prefix to filenames
    * @param {string} videoId - YouTube video ID
    * @param {Object} metadata - {channel, title} (optional for backward compatibility)
-   * @returns {string} Filename: {videoId}_{formattedTitle}.md or {videoId}.md
+   * @returns {string} Filename: transcript_{videoId}_{formattedTitle}.md or transcript_{videoId}.md
    */
   async buildFilename(videoId, metadata) {
-    // Backward compatibility: old format if no metadata
+    // Backward compatibility: old format if no metadata (with transcript_ prefix)
     if (!metadata || !metadata.title) {
-      return `${videoId}.md`;
+      return `transcript_${videoId}.md`;
     }
 
     // Format title for filesystem safety
@@ -432,15 +470,16 @@ class StorageService {
     const metadataService = new MetadataService();
     const formattedTitle = metadataService.formatTitle(metadata.title);
 
-    // Construct base filename
-    let filename = `${videoId}_${formattedTitle}.md`;
+    // Construct base filename with transcript_ prefix (Task 11.3)
+    let filename = `transcript_${videoId}_${formattedTitle}.md`;
 
     // CRITICAL: Validate total length < 255 (filesystem limit)
+    // Account for prefix: 11 chars for "transcript_"
     if (filename.length > 255) {
       // Truncate formatted title to fit
-      const maxTitleLength = 255 - videoId.length - 4; // 4 chars for "_.md"
+      const maxTitleLength = 255 - 11 - videoId.length - 4; // 11 for "transcript_", 4 for "_.md"
       const truncatedTitle = formattedTitle.substring(0, maxTitleLength);
-      filename = `${videoId}_${truncatedTitle}.md`;
+      filename = `transcript_${videoId}_${truncatedTitle}.md`;
     }
 
     // CRITICAL: Handle filename collisions (different videos, same sanitized title)
@@ -633,7 +672,7 @@ class StorageService {
     let fileContent = content;
     if (metadata && metadata.channel && metadata.title) {
       const header = this.buildMetadataHeader(metadata, videoId);
-      fileContent = `${header}\n${content}`;
+      fileContent = `${header}\n${content}\n`;
     }
 
     // Validate size BEFORE building filename (fail fast)
@@ -678,6 +717,7 @@ class StorageService {
 
   /**
    * Get transcript file path (searches for metadata-based filenames)
+   * UPDATED Task 11.3: Searches NEW pattern first, falls back to OLD
    * @param {string} videoId - YouTube video ID
    * @returns {Promise<string|null>} File path or null if not found
    */
@@ -687,11 +727,20 @@ class StorageService {
     try {
       const files = await fs.readdir(transcriptsPath);
 
-      // Search for files matching {videoId}_*.md or {videoId}.md
-      const match = files.find(
+      // PRIORITY 1: Search for NEW pattern first (transcript_ prefix)
+      let match = files.find(
         (file) =>
-          (file.startsWith(`${videoId}_`) && file.endsWith('.md')) || file === `${videoId}.md`
+          (file.startsWith(`transcript_${videoId}_`) && file.endsWith('.md')) ||
+          file === `transcript_${videoId}.md`
       );
+
+      // PRIORITY 2: Fallback to OLD pattern for backward compatibility
+      if (!match) {
+        match = files.find(
+          (file) =>
+            (file.startsWith(`${videoId}_`) && file.endsWith('.md')) || file === `${videoId}.md`
+        );
+      }
 
       return match ? path.join(transcriptsPath, match) : null;
     } catch (error) {

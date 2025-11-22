@@ -165,8 +165,9 @@ program.action(() => require('./commands/process')());
 
 **Clean Command** (`src/commands/clean.js`):
 - Validates date format (YYYY-MM-DD)
-- Filters registry for entries older than date
-- Deletes transcript files, links, and registry entries
+- Converts to YYMMDD and matches against date portion of date_added (ignores THHMM)
+- Filters registry for entries older than date (boundary excluded)
+- Deletes transcript files and registry entries
 - Displays deletion count
 
 #### TranscriptService (src/services/TranscriptService.js)
@@ -241,21 +242,14 @@ class StorageService {
 ```javascript
 {
   "videoId1": {
-    "date_added": "2025-11-19",
-    "channel": "JavaScript Mastery",
-    "title": "How to Build REST APIs - Complete Tutorial",
-    "links": [
-      "/absolute/path/to/project1/transcripts/videoId1_how_to_build_rest_apis_complete_tutorial.md",
-      "/absolute/path/to/project2/transcripts/videoId1_how_to_build_rest_apis_complete_tutorial.md"
-    ]
+    "date_added": "251119T1430",
+    "channel": "javascript_mastery",
+    "title": "how_to_build_rest_apis_complete_tutorial"
   },
   "videoId2": {
-    "date_added": "2025-11-18",
-    "channel": "Tech with Tim",
-    "title": "Python Tutorial for Beginners",
-    "links": [
-      "/absolute/path/to/project1/transcripts/videoId2_python_tutorial_for_beginners.md"
-    ]
+    "date_added": "251118T0945",
+    "channel": "tech_with_tim",
+    "title": "python_tutorial_for_beginners"
   }
 }
 ```
@@ -343,8 +337,6 @@ class MetadataService {
 
 **Key Functions**:
 - Create symbolic links (FR-4.1, TR-9)
-- Track link locations in registry (FR-4.2)
-- Remove links during cleanup
 - Handle cross-platform path resolution
 - Ensure project-local transcripts/ directory exists
 
@@ -353,19 +345,17 @@ class MetadataService {
 **Key Methods**:
 ```javascript
 class LinkManager {
-  async createLink(videoId) // Create symlink and track in registry
-  async removeAllLinks(videoId) // Delete all links for video
-  async _trackLink(videoId, linkPath) // Add to registry.links array
+  async createLink(videoId, formattedTitle) // Create symlink
   async _unlinkSafely(linkPath) // Delete link with ENOENT tolerance
 }
 ```
 
 **Link Structure**:
 ```
-Source: ~/.transcriptor/transcripts/{videoId}_{formattedTitle}.md
-Target: ./transcripts/{videoId}_{formattedTitle}.md (project-local)
+Source: ~/.transcriptor/transcripts/transcript_{videoId}_{formattedTitle}.md
+Target: ./transcripts/transcript_{videoId}_{formattedTitle}.md (project-local)
 Type: Symbolic link
-Filename: Built from registry metadata (channel and title)
+Filename: Built using formatted title (transcript_{videoId}_{formattedTitle}.md)
 ```
 
 #### MaintenanceService (src/services/MaintenanceService.js)
@@ -375,10 +365,9 @@ Filename: Built from registry metadata (channel and title)
 **Key Functions**:
 - Check registry entries have corresponding files (FR-7.1, TR-14)
 - Remove orphaned registry entries
-- Delete broken symbolic links
 - Run before each processing operation
 
-**Dependencies**: StorageService, LinkManager
+**Dependencies**: StorageService
 
 **Key Methods**:
 ```javascript
@@ -392,7 +381,7 @@ class MaintenanceService {
 1. Load registry
 2. For each video ID in registry:
    - Check if transcript file exists
-   - If missing: delete all tracked links, remove registry entry
+   - If missing: remove registry entry
 3. Save updated registry
 
 ## Request Processing Flow
@@ -426,7 +415,6 @@ sequenceDiagram
         Maintenance->>Storage: transcriptExists(videoId)
         Storage->>FS: Check file exists
         alt File missing
-            Maintenance->>LinkMgr: removeAllLinks(videoId)
             Maintenance->>Storage: Delete registry entry
         end
     end
@@ -484,10 +472,8 @@ sequenceDiagram
 
         TS->>LinkMgr: createLink(videoId, formattedTitle)
         LinkMgr->>FS: Ensure ./transcripts/ directory
-        LinkMgr->>FS: Create symlink ./transcripts/{id}_{formattedTitle}.md
+        LinkMgr->>FS: Create symlink ./transcripts/transcript_{id}_{formattedTitle}.md
         FS-->>LinkMgr: Link created
-        LinkMgr->>Storage: Add link path to registry
-        Storage->>FS: Atomic write data.json
 
         TS-->>ProcessCmd: Success result
     end
@@ -508,13 +494,12 @@ sequenceDiagram
    - Fetch transcript and metadata in parallel using Promise.all
    - Transcript from Scrape Creators API (with retry logic)
    - Metadata from YouTube oEmbed API (no retry, non-fatal)
-7. **Title Formatting**: Sanitize title for filesystem compatibility
-8. **Metadata Header**: Build header with channel, title, video ID, and URL
-9. **Storage**: Save transcript with metadata header to ~/.transcriptor/transcripts/{id}_{formattedTitle}.md immediately
-10. **Registry Update**: Add entry to data.json with date_added, channel, title, and empty links array
-11. **Link Creation**: Create symbolic link in ./transcripts/ pointing to central storage (using formatted title in filename)
-12. **Link Tracking**: Add link path to registry entry
-13. **Summary**: Display processing results (success count, cache hits, failures)
+7. **Title Formatting**: Sanitize title and channel for filesystem compatibility
+8. **Metadata Header**: Build header with formatted channel, formatted title, video ID, and URL
+9. **Storage**: Save transcript with metadata header to ~/.transcriptor/transcripts/transcript_{id}_{formattedTitle}.md immediately
+10. **Registry Update**: Add entry to data.json with date_added (YYMMDDTHHMM format), formatted channel, and formatted title
+11. **Link Creation**: Create symbolic link in ./transcripts/ pointing to central storage (transcript_{id}_{formattedTitle}.md)
+12. **Summary**: Display processing results (success count, cache hits, failures)
 
 ## Storage Architecture
 
@@ -523,20 +508,20 @@ graph TD
     A["~/.transcriptor/<br/>(Central Storage)"] --> B["data.json<br/>(Registry)"]
     A --> C["transcripts/"]
 
-    C --> C1["dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(Video 1 transcript)"]
-    C --> C2["jNQXAC9IVRw_python_tutorial.md<br/>(Video 2 transcript)"]
-    C --> C3["9bZkp7q19f0_react_hooks.md<br/>(Video N transcript)"]
+    C --> C1["transcript_dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(Video 1 transcript)"]
+    C --> C2["transcript_jNQXAC9IVRw_python_tutorial.md<br/>(Video 2 transcript)"]
+    C --> C3["transcript_9bZkp7q19f0_react_hooks.md<br/>(Video N transcript)"]
 
-    D["./project1/transcripts/<br/>(Project Local)"] --> D1["dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(symlink)"]
-    D --> D2["jNQXAC9IVRw_python_tutorial.md<br/>(symlink)"]
+    D["./project1/transcripts/<br/>(Project Local)"] --> D1["transcript_dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(symlink)"]
+    D --> D2["transcript_jNQXAC9IVRw_python_tutorial.md<br/>(symlink)"]
 
-    E["./project2/transcripts/<br/>(Project Local)"] --> E1["dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(symlink)"]
+    E["./project2/transcripts/<br/>(Project Local)"] --> E1["transcript_dQw4w9WgXcQ_how_to_build_rest_apis.md<br/>(symlink)"]
 
     D1 -.->|"points to"| C1
     D2 -.->|"points to"| C2
     E1 -.->|"points to"| C1
 
-    B --> F["Registry Entry:<br/>{<br/>  date_added: '2025-11-19',<br/>  channel: 'JavaScript Mastery',<br/>  title: 'How to Build REST APIs',<br/>  links: [...]<br/>}"]
+    B --> F["Registry Entry:<br/>{<br/>  date_added: '251119T1430',<br/>  channel: 'javascript_mastery',<br/>  title: 'how_to_build_rest_apis'<br/>}"]
 
     style A fill:#e8f5e9
     style B fill:#fff3e0
@@ -562,34 +547,31 @@ graph TD
   - `data.json`: Registry tracking all transcripts and links
   - `transcripts/`: Directory containing transcript markdown files
 
-**Transcript Files** (`~/.transcriptor/transcripts/{videoId}_{formattedTitle}.md`):
-- **Naming**: Video ID + underscore + formatted title (FR-2.5, TR-23)
-- **Format**: Metadata header + plain text transcript (FR-11)
+**Transcript Files** (`~/.transcriptor/transcripts/transcript_{videoId}_{formattedTitle}.md`):
+- **Naming**: `transcript_` prefix + video ID + underscore + formatted title (FR-2.5, TR-23)
+- **Format**: Markdown with structured headers (FR-11)
 - **Content**:
-  - Metadata section: Channel, Title, Youtube ID, URL (TR-27)
-  - Blank line separator
-  - Transcript text: `transcript_only_text` field from API response
+  - `# Transcript` header
+  - `## Information` section with formatted channel, formatted title, YouTube ID, URL (TR-27)
+  - `## Content` section with transcript text from API
 - **Encoding**: UTF-8
 - **Size limit**: 10MB maximum per TR specifications
 
 **Registry File** (`~/.transcriptor/data.json`):
 - **Format**: JSON with 2-space indentation
-- **Schema**: `{videoId: {date_added, channel, title, links}}` (FR-3.2, TR-24)
+- **Schema**: `{videoId: {date_added, channel, title}}` (FR-3.2, TR-24)
+- **date_added format**: YYMMDDTHHMM (includes date and time)
+- **channel**: Formatted/sanitized version (lowercase, underscores)
+- **title**: Formatted/sanitized version (lowercase, underscores)
 - **Write Strategy**: Atomic write (temp file + rename, per TR-8)
 - **Validation**: Structure validated on load, corrupted file regenerated
 
-**Project-Local Links** (`./transcripts/{videoId}_{formattedTitle}.md`):
+**Project-Local Links** (`./transcripts/transcript_{videoId}_{formattedTitle}.md`):
 - **Type**: Symbolic links (symlinks)
 - **Target**: Points to central storage transcript
-- **Naming**: Same as source file (video ID + formatted title)
+- **Naming**: `transcript_` prefix + video ID + underscore + formatted title
 - **Purpose**: Project-specific access without file duplication
 - **Creation**: Automatic on transcript processing
-- **Tracking**: All link paths stored in registry entry
-
-**Bidirectional Tracking**:
-- Registry tracks which projects link to each transcript
-- Enables complete cleanup when deleting transcript
-- Supports orphan detection during integrity checks
 
 ## Module Responsibilities
 
@@ -616,14 +598,14 @@ graph TD
 - Dependencies: axios
 
 **LinkManager** (`src/services/LinkManager.js`):
-- Interface: `createLink(videoId, formattedTitle)`, `removeAllLinks(videoId)`
-- Responsibilities: Symbolic link creation with formatted filenames, link tracking, cleanup
+- Interface: `createLink(videoId, formattedTitle)`
+- Responsibilities: Symbolic link creation with formatted filenames
 - Dependencies: fs-extra, StorageService, PathResolver
 
 **MaintenanceService** (`src/services/MaintenanceService.js`):
 - Interface: `validateIntegrity()`
 - Responsibilities: Data integrity checks, orphan cleanup
-- Dependencies: StorageService, LinkManager
+- Dependencies: StorageService
 
 ### Utilities Layer
 
@@ -680,75 +662,71 @@ graph TD
 // Type definition
 {
   [videoId: string]: {
-    date_added: string,  // YYYY-MM-DD format
-    channel: string,     // Channel/author name
-    title: string,       // Original video title
-    links: string[]      // Absolute paths to symbolic links
+    date_added: string,  // YYMMDDTHHMM format
+    channel: string,     // Formatted channel name
+    title: string        // Formatted video title
   }
 }
 
 // Example
 {
   "dQw4w9WgXcQ": {
-    "date_added": "2025-11-19",
-    "channel": "JavaScript Mastery",
-    "title": "How to Build REST APIs - Complete Tutorial",
-    "links": [
-      "/Users/developer/project1/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md",
-      "/Users/developer/project2/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"
-    ]
+    "date_added": "251119T1430",
+    "channel": "javascript_mastery",
+    "title": "how_to_build_rest_apis_complete_tutorial"
   },
   "jNQXAC9IVRw": {
-    "date_added": "2025-11-18",
-    "channel": "Tech with Tim",
-    "title": "Python Tutorial for Beginners",
-    "links": [
-      "/Users/developer/project1/transcripts/jNQXAC9IVRw_python_tutorial_for_beginners.md"
-    ]
+    "date_added": "251118T0945",
+    "channel": "tech_with_tim",
+    "title": "python_tutorial_for_beginners"
   }
 }
 ```
 
 **Field Descriptions**:
 - `videoId` (key): 11-character YouTube video identifier
-- `date_added`: ISO date (YYYY-MM-DD) when transcript first acquired
-- `channel`: Channel name from YouTube metadata (or "Unknown Channel")
-- `title`: Original video title from YouTube metadata (or "Unknown Title")
-- `links`: Array of absolute paths to symbolic links in projects
+- `date_added`: Timestamp in YYMMDDTHHMM format when transcript first acquired
+- `channel`: Formatted channel name (sanitized, lowercase, underscores)
+- `title`: Formatted video title (sanitized, lowercase, underscores)
 
 **Validation Rules**:
-- Only allowed keys: `date_added`, `channel`, `title`, `links` (FR-3.2)
-- `date_added` must match YYYY-MM-DD format
+- Only allowed keys: `date_added`, `channel`, `title` (FR-3.2)
+- `date_added` must match YYMMDDTHHMM format (/^\d{6}T\d{4}$/)
 - `channel` must be non-empty string
 - `title` must be non-empty string
-- `links` must be an array (can be empty)
-- All link paths should be absolute
 
 ### Transcript File Format
 
 ```markdown
-Channel: JavaScript Mastery
-Title: How to Build REST APIs - Complete Tutorial
+# Transcript
+
+## Information
+
+Channel: javascript_mastery
+Title: how_to_build_rest_apis_complete_tutorial
 Youtube ID: dQw4w9WgXcQ
 URL: https://youtu.be/dQw4w9WgXcQ
+
+## Content
 
 Hello and welcome to this video tutorial. Today we're going to learn about
 JavaScript promises and async await patterns. Let's start with the basics...
 ```
 
 **Structure** (FR-11):
-- **Section 1**: Metadata header (4 lines)
-  - Channel: Original channel/author name
-  - Title: Original unmodified video title
+- **Header**: `# Transcript` markdown heading
+- **Information Section**: `## Information` heading followed by metadata fields
+  - Channel: Formatted channel name (sanitized)
+  - Title: Formatted video title (sanitized)
   - Youtube ID: Video identifier
   - URL: Standardized short URL (youtu.be format)
-- **Section 2**: Blank line separator
-- **Section 3**: Transcript text (plain text from `transcript_only_text`)
+- **Content Section**: `## Content` heading followed by transcript text
 
 **Characteristics**:
-- Metadata header at top (FR-11.1)
+- Structured markdown format with headers (FR-11.1)
+- Formatted metadata (lowercase, underscores, sanitized)
 - No timestamps or speaker labels in transcript
-- Plain text without markdown formatting
+- Plain text transcript content from `transcript_only_text`
 - UTF-8 encoding
 - Line breaks preserved from API response
 
@@ -882,7 +860,7 @@ Services
   ├─→ APIClient → ErrorHandler, ValidationHelpers, URLValidator
   ├─→ MetadataService → TitleFormatter, URLShortener
   ├─→ LinkManager → StorageService, PathResolver
-  └─→ MaintenanceService → StorageService, LinkManager
+  └─→ MaintenanceService → StorageService
 
 Utilities
   ├─→ PathResolver → (Node.js path, os)

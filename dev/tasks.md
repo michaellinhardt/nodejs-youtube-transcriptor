@@ -1,13 +1,13 @@
 # Tasks
 
-<!-- Task List Generated: 2025-11-19 -->
-<!-- Next Review Recommended: 2025-11-26 -->
+<!-- Task List Generated: 2025-11-22 -->
+<!-- Next Review Recommended: 2025-11-29 -->
 
 ## Development Sequence Notes
 
-Priority order: 1.0 → 2.0 → 3.0 → 4.0 → 5.0 → 6.0 (can parallel with 7.0) → 8.0 → 9.0 → 10.0
-Critical path: 1.0 → 2.1 → 3.1 → 4.1 → 5.1 → 10.1 → 10.2
-High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform), 10.1 (oEmbed API integration)
+Priority order: 1.0 → 2.0 → 3.0 → 4.0 → 5.0 → 6.0 (can parallel with 7.0) → 8.0 → 9.0 → 10.0 → 11.0
+Critical path: 1.0 → 2.1 → 3.1 → 4.1 → 5.1 → 10.1 → 10.2 → 11.0
+High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform), 10.1 (oEmbed API integration), 11.0 (data structure migration)
 
 ## 1.0 Project Initialization & Setup
 
@@ -344,3 +344,75 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform), 10.
   - [ ] 10.10.8 Verify data command displays metadata correctly
   - [ ] 10.10.9 Verify clean command deletes metadata-based files
   - [ ] 10.10.10 Test parallel fetch performance (transcript + metadata)
+
+## 11.0 Data Structure Migration
+
+<!-- Estimated: 14 hours total | Depends on: 10.0 | Implements Feature Changes | High Risk: Data Migration -->
+
+- [x] 11.1 Date format migration (implements FR-3.2, BR-3)
+  - [x] 11.1.1 Update date generation to YYMMDDTHHMM format in StorageService
+  - [x] 11.1.2 Create generateDateAdded utility implementing TR-31 specification
+  - [x] 11.1.3 Update date validation regex to match YYMMDDTHHMM pattern
+  - [x] 11.1.4 Update isValidRegistryStructure to validate new date format
+  - [ ] 11.1.5 Test date generation with various timestamps
+  - [ ] 11.1.6 Verify date validation rejects old YYYY-MM-DD format
+- [x] 11.2 Channel formatting implementation (implements FR-2.5, TR-26)
+  - [x] 11.2.1 Apply formatText to channel field in MetadataService
+  - [x] 11.2.2 Update registry storage to use formatted channel
+  - [x] 11.2.3 Update transcript header to display formatted channel
+  - [ ] 11.2.4 Test channel formatting with special characters
+  - [ ] 11.2.5 Verify channel formatting matches title formatting rules
+- [x] 11.3 Filename pattern updates (implements FR-2.4, TR-23)
+  - [x] 11.3.1 Add "transcript_" prefix to buildFilename utility
+  - [x] 11.3.2 Update StorageService.getTranscriptPath to use new pattern
+  - [x] 11.3.3 Update StorageService.saveTranscript filename generation
+  - [x] 11.3.4 Update LinkManager.createLink to use new filename pattern
+  - [x] 11.3.5 Update StorageService.transcriptExists to search with new pattern
+  - [ ] 11.3.6 Test filename generation with prefix in both locations
+  - [ ] 11.3.7 Verify backward compatibility with old filenames during cache checks
+- [x] 11.4 Registry structure cleanup (implements FR-3.2, TR-24)
+  - [x] 11.4.1 Remove "links" field from ALLOWED_ENTRY_KEYS constant
+  - [x] 11.4.2 Update registry validation to reject entries with links field
+  - [x] 11.4.3 Create migration script to remove links arrays from existing entries
+  - [x] 11.4.4 Update registry save operations to exclude links field
+  - [ ] 11.4.5 Test registry validation with old format (should fail gracefully)
+  - [ ] 11.4.6 Verify no code references links field after migration
+- [x] 11.5 Transcript file structure updates (implements FR-11, TR-27)
+  - [x] 11.5.1 Update buildMetadataHeader to use new markdown structure
+  - [x] 11.5.2 Add "# Transcript" and "## Information" headers
+  - [x] 11.5.3 Add "## Content" header before transcript text
+  - [x] 11.5.4 Use formatted channel in header (not original)
+  - [x] 11.5.5 Use formatted title in header (not original)
+  - [ ] 11.5.6 Test header generation with various metadata
+  - [ ] 11.5.7 Verify header structure matches FR-11.1 specification exactly
+- [x] 11.6 Cleaning routine modifications (implements FR-6.1, TR-32, TR-33)
+  - [x] 11.6.1 Update date matching to use YYMMDD prefix extraction
+  - [x] 11.6.2 Implement convertDateForCleaning utility per TR-30
+  - [x] 11.6.3 Update clean command to ignore THHMM portion during comparison
+  - [x] 11.6.4 Remove link deletion logic from cleanup operations
+  - [x] 11.6.5 Update deleteTranscript to use new filename pattern
+  - [ ] 11.6.6 Test date matching with YYMMDDTHHMM entries
+  - [ ] 11.6.7 Verify boundary date exclusion works correctly
+  - [ ] 11.6.8 Test cleanup with mixed date formats (migration scenario)
+- [x] 11.7 Data migration and backward compatibility
+  - [x] 11.7.1 Create migration validator to identify old format entries
+  - [x] 11.7.2 Implement automatic migration on registry load
+  - [x] 11.7.3 Convert YYYY-MM-DD dates to YYMMDDTHHMM (preserve original timestamp or use midnight)
+  - [x] 11.7.4 Remove links arrays from all registry entries
+  - [x] 11.7.5 Rename old transcript files to new pattern (add transcript_ prefix)
+  - [x] 11.7.6 Update old transcript file headers to new markdown structure
+  - [x] 11.7.7 Create backup of data.json before migration
+  - [x] 11.7.8 Log migration actions for user visibility
+  - [ ] 11.7.9 Test migration with sample old-format data
+  - [ ] 11.7.10 Verify migrated entries pass new validation rules
+- [ ] 11.8 Testing and validation
+  - [ ] 11.8.1 Test new video processing creates correct data structure
+  - [ ] 11.8.2 Test date command displays YYMMDDTHHMM format correctly
+  - [ ] 11.8.3 Test clean command with new date format
+  - [ ] 11.8.4 Verify transcript files use new naming pattern in both locations
+  - [ ] 11.8.5 Verify transcript files use new markdown structure
+  - [ ] 11.8.6 Test registry contains no links fields
+  - [ ] 11.8.7 Test channel and title both formatted in registry and files
+  - [ ] 11.8.8 Verify cleaning routine ignores time portion correctly
+  - [ ] 11.8.9 Test mixed old/new format handling during migration
+  - [ ] 11.8.10 Full integration test with fresh install and migration scenarios

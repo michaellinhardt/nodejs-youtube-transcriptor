@@ -174,21 +174,14 @@ async function loadRegistry() {
 ```json
 {
   "dQw4w9WgXcQ": {
-    "date_added": "2025-11-19",
-    "channel": "JavaScript Mastery",
-    "title": "How to Build REST APIs - Complete Tutorial",
-    "links": [
-      "/Users/developer/project1/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md",
-      "/Users/developer/project2/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"
-    ]
+    "date_added": "251119T1423",
+    "channel": "javascript_mastery",
+    "title": "how_to_build_rest_apis_complete_tutorial"
   },
   "jNQXAC9IVRw": {
-    "date_added": "2025-11-18",
-    "channel": "Tech with Tim",
-    "title": "Python Tutorial for Beginners",
-    "links": [
-      "/Users/developer/project1/transcripts/jNQXAC9IVRw_python_tutorial_for_beginners.md"
-    ]
+    "date_added": "251118T0945",
+    "channel": "tech_with_tim",
+    "title": "python_tutorial_for_beginners"
   }
 }
 ```
@@ -207,7 +200,7 @@ const entryExists = registry.hasOwnProperty(videoId);
 ```javascript
 // When checking cache, we look for any file matching the video ID pattern
 // since the formatted title portion may vary
-const transcriptPattern = `~/.transcriptor/transcripts/${videoId}_*.md`;
+const transcriptPattern = `~/.transcriptor/transcripts/transcript_${videoId}_*.md`;
 const fileExists = await fs.pathExists(transcriptPath);
 ```
 
@@ -711,38 +704,61 @@ The system constructs a metadata header for the transcript file.
 **Code Reference**: `src/services/MetadataService.js` - `buildMetadataHeader()`
 
 **Template**:
-```
-Channel: {channel}
-Title: {title}
+
+```markdown
+# Transcript
+
+## Information
+
+Channel: {formatted_channel}
+Title: {formatted_title}
 Youtube ID: {videoId}
 URL: {shortUrl}
+
+## Content
 ```
 
 **Implementation**:
 ```javascript
-function buildMetadataHeader(metadata, videoId) {
+function buildTranscriptFile(formattedChannel, formattedTitle, videoId, transcriptText) {
   const shortUrl = this.buildShortUrl(videoId);
 
   return [
-    `Channel: ${metadata.channel}`,
-    `Title: ${metadata.title}`,
+    '# Transcript',
+    '',
+    '## Information',
+    '',
+    `Channel: ${formattedChannel}`,
+    `Title: ${formattedTitle}`,
     `Youtube ID: ${videoId}`,
-    `URL: ${shortUrl}`
+    `URL: ${shortUrl}`,
+    '',
+    '## Content',
+    '',
+    transcriptText
   ].join('\n');
 }
 ```
 
 **Example Output**:
-```
-Channel: JavaScript Mastery
-Title: How to Build REST APIs - Complete Tutorial
+
+```markdown
+# Transcript
+
+## Information
+
+Channel: javascript_mastery
+Title: how_to_build_rest_apis_complete_tutorial
 Youtube ID: dQw4w9WgXcQ
 URL: https://youtu.be/dQw4w9WgXcQ
+
+## Content
 ```
 
 **Field Preservation**:
-- `Channel`: Preserved as-is from API (or "Unknown Channel")
-- `Title`: Original unmodified title (or "Unknown Title")
+
+- `Channel`: Formatted version (sanitized like title) from API (or "unknown_channel")
+- `Title`: Formatted version (sanitized) from API (or "unknown_title")
 - `Youtube ID`: Video identifier
 - `URL`: Standardized short format
 
@@ -766,7 +782,7 @@ To ensure crash resilience (FR-9.2), the system uses atomic writes:
 **Implementation**:
 ```javascript
 async function saveTranscript(videoId, formattedTitle, content) {
-  const filename = `${videoId}_${formattedTitle}.md`;
+  const filename = `transcript_${videoId}_${formattedTitle}.md`;
   const transcriptPath = path.join(
     this.paths.getTranscriptsPath(),
     filename
@@ -797,9 +813,10 @@ async function saveTranscript(videoId, formattedTitle, content) {
 
 ### Storage Location
 
-**Path**: `~/.transcriptor/transcripts/{videoId}_{formattedTitle}.md`
+**Path**: `~/.transcriptor/transcripts/transcript_{videoId}_{formattedTitle}.md`
 
 **Path Resolution**:
+
 - `~` expands to user home directory (cross-platform)
   - macOS/Linux: `/Users/username/.transcriptor/transcripts/`
   - Windows: `C:\Users\username\.transcriptor\transcripts\`
@@ -808,16 +825,23 @@ async function saveTranscript(videoId, formattedTitle, content) {
 
 ### Content Stored
 
-**Format**: Metadata header + plain text transcript
-**Structure**: Metadata section (4 lines) + blank line + transcript text
+**Format**: Markdown with metadata header + plain text transcript
+**Structure**: Title header + Information section + Content section
 **Encoding**: UTF-8
 
-**Example File Content** (`~/.transcriptor/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`):
-```
-Channel: JavaScript Mastery
-Title: How to Build REST APIs - Complete Tutorial
+**Example File Content** (`~/.transcriptor/transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`):
+
+```markdown
+# Transcript
+
+## Information
+
+Channel: javascript_mastery
+Title: how_to_build_rest_apis_complete_tutorial
 Youtube ID: dQw4w9WgXcQ
 URL: https://youtu.be/dQw4w9WgXcQ
+
+## Content
 
 Hello and welcome to this video tutorial. Today we're going to learn about JavaScript promises and async await patterns. Let's start with the basics of asynchronous programming.
 
@@ -825,13 +849,15 @@ First, let's understand what a promise is. A promise is an object that represent
 ```
 
 **Content Composition**:
-1. **Metadata header** (from Stage 4):
-   - Channel: {channel name}
-   - Title: {original title}
+
+1. **Title header**: `# Transcript`
+2. **Information section**: `## Information` with metadata fields
+   - Channel: {formatted channel name}
+   - Title: {formatted title}
    - Youtube ID: {videoId}
    - URL: {short URL}
-2. **Blank line separator**
-3. **Transcript text**: `transcript_only_text` field from API response as-is
+3. **Content section**: `## Content` followed by transcript text
+4. **Transcript text**: `transcript_only_text` field from API response as-is
 
 ### Size Validation
 
@@ -853,12 +879,14 @@ Files exceeding this limit are rejected and logged as errors.
 **Scenario**: Process crashes after API fetch but before file write completes
 
 **State**:
+
 - API returned transcript and metadata
-- Temporary file may partially exist: `dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md.tmp`
-- Final file does not exist: `dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`
+- Temporary file may partially exist: `transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md.tmp`
+- Final file does not exist: `transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`
 - Registry not updated
 
 **Recovery**: User re-runs `transcriptor`
+
 1. Cache check: Registry entry missing → cache miss
 2. File check: File doesn't exist → cache miss
 3. API fetch: Fetch transcript and metadata again (idempotent operations)
@@ -870,7 +898,7 @@ Files exceeding this limit are rejected and logged as errors.
 
 ## Stage 6: Registry Update
 
-After saving the transcript file, the system updates the metadata registry to track the transcript's existence and link locations.
+After saving the transcript file, the system updates the metadata registry to track the transcript's existence.
 
 ### Registry Entry Creation
 
@@ -880,24 +908,27 @@ After saving the transcript file, the system updates the metadata registry to tr
 ```javascript
 {
   "videoId": {
-    "date_added": "YYYY-MM-DD",
-    "channel": "Channel Name",
-    "title": "Original Video Title",
-    "links": []
+    "date_added": "YYMMDDTHHMM",
+    "channel": "formatted_channel_name",
+    "title": "formatted_video_title"
   }
 }
 ```
 
-**Date Format**: ISO 8601 date-only format (`YYYY-MM-DD`)
+**Date Format**: Compact timestamp format (`YYMMDDTHHMM`)
+
+- `YYMMDD`: Year (2 digits), Month (2 digits), Day (2 digits)
+- `T`: Separator
+- `HHMM`: Hour (24h format, 2 digits), Minute (2 digits)
 
 **Example**:
+
 ```json
 {
   "dQw4w9WgXcQ": {
-    "date_added": "2025-11-19",
-    "channel": "JavaScript Mastery",
-    "title": "How to Build REST APIs - Complete Tutorial",
-    "links": []
+    "date_added": "251119T1423",
+    "channel": "javascript_mastery",
+    "title": "how_to_build_rest_apis_complete_tutorial"
   }
 }
 ```
@@ -905,21 +936,28 @@ After saving the transcript file, the system updates the metadata registry to tr
 ### Registry Update Process
 
 ```javascript
-async function updateRegistry(videoId, metadata) {
+async function updateRegistry(videoId, metadata, formattedChannel, formattedTitle) {
   // 1. Load current registry
   const registry = await this.loadRegistry();
 
   // 2. Check if entry already exists
   if (!registry[videoId]) {
-    // 3. Create new entry with current date and metadata
+    // 3. Create new entry with current timestamp and formatted metadata
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    const timestamp = `${yy}${mm}${dd}T${hh}${min}`;
+
     registry[videoId] = {
-      date_added: new Date().toISOString().split('T')[0], // YYYY-MM-DD
-      channel: metadata.channel,
-      title: metadata.title,
-      links: []
+      date_added: timestamp, // YYMMDDTHHMM
+      channel: formattedChannel,
+      title: formattedTitle
     };
   }
-  // If entry exists, preserve existing date_added, metadata, and links
+  // If entry exists, preserve existing date_added and metadata
 
   // 4. Save updated registry atomically
   await this.saveRegistry(registry);
@@ -964,12 +1002,12 @@ async function saveRegistry(registry) {
 Before writing, the registry structure is validated:
 
 **Validation Rules**:
+
 - Must be an object (not array or primitive)
-- Each entry must have exactly four keys: `date_added`, `channel`, `title`, `links`
-- `date_added` must match `YYYY-MM-DD` format
+- Each entry must have exactly three keys: `date_added`, `channel`, `title`
+- `date_added` must match `YYMMDDTHHMM` format
 - `channel` must be a non-empty string
 - `title` must be a non-empty string
-- `links` must be an array
 
 **Code Reference**: `src/services/StorageService.js` - `isValidRegistryStructure()`
 
@@ -984,13 +1022,13 @@ function isValidRegistryStructure(data) {
 
     // Check required keys
     const keys = Object.keys(entry);
-    const requiredKeys = ['date_added', 'channel', 'title', 'links'];
-    if (keys.length !== 4 || !requiredKeys.every(key => keys.includes(key))) {
+    const requiredKeys = ['date_added', 'channel', 'title'];
+    if (keys.length !== 3 || !requiredKeys.every(key => keys.includes(key))) {
       return false;
     }
 
-    // Validate date_added format
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.date_added)) {
+    // Validate date_added format (YYMMDDTHHMM)
+    if (!/^\d{6}T\d{4}$/.test(entry.date_added)) {
       return false;
     }
 
@@ -1001,11 +1039,6 @@ function isValidRegistryStructure(data) {
 
     // Validate title is non-empty string
     if (typeof entry.title !== 'string' || entry.title.length === 0) {
-      return false;
-    }
-
-    // Validate links is array
-    if (!Array.isArray(entry.links)) {
       return false;
     }
   }
@@ -1043,16 +1076,16 @@ await fs.ensureDir(localDir); // Create if doesn't exist
 
 ### Symbolic Link Creation
 
-**Source** (target of link): `~/.transcriptor/transcripts/{videoId}_{formattedTitle}.md`
-**Destination** (link location): `./transcripts/{videoId}_{formattedTitle}.md`
+**Source** (target of link): `~/.transcriptor/transcripts/transcript_{videoId}_{formattedTitle}.md`
+**Destination** (link location): `./transcripts/transcript_{videoId}_{formattedTitle}.md`
 **Type**: Symbolic link (symlink)
-**Filename**: Built from video ID and formatted title
+**Filename**: Built from video ID and formatted title with "transcript_" prefix
 
 **Code Reference**: `src/services/LinkManager.js` - `createLink()`
 
 ```javascript
 async function createLink(videoId, formattedTitle) {
-  const filename = `${videoId}_${formattedTitle}.md`;
+  const filename = `transcript_${videoId}_${formattedTitle}.md`;
   const sourcePath = path.join(
     this.pathResolver.getTranscriptsPath(),
     filename
@@ -1069,72 +1102,12 @@ async function createLink(videoId, formattedTitle) {
   await fs.symlink(sourcePath, linkPath, 'file');
 
   console.log(`[LinkManager] Created link: ${filename}`);
-
-  // Track link in registry
-  await this._trackLink(videoId, linkPath);
-}
-```
-
-### Link Tracking in Registry
-
-After creating the link, its path is added to the registry entry's `links` array:
-
-```javascript
-async function _trackLink(videoId, linkPath) {
-  // 1. Load registry
-  const registry = await this.storage.loadRegistry();
-
-  // 2. Get entry (should exist from Stage 5)
-  if (!registry[videoId]) {
-    registry[videoId] = {
-      date_added: new Date().toISOString().split('T')[0],
-      links: []
-    };
-  }
-
-  // 3. Add link path if not already tracked
-  const absoluteLinkPath = path.resolve(linkPath);
-  if (!registry[videoId].links.includes(absoluteLinkPath)) {
-    registry[videoId].links.push(absoluteLinkPath);
-  }
-
-  // 4. Save registry atomically
-  await this.storage.saveRegistry(registry);
-}
-```
-
-**Example Registry After Link Tracking**:
-```json
-{
-  "dQw4w9WgXcQ": {
-    "date_added": "2025-11-19",
-    "channel": "JavaScript Mastery",
-    "title": "How to Build REST APIs - Complete Tutorial",
-    "links": [
-      "/Users/developer/project1/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"
-    ]
-  }
-}
-```
-
-If the same video is processed from a different project:
-```json
-{
-  "dQw4w9WgXcQ": {
-    "date_added": "2025-11-19",
-    "channel": "JavaScript Mastery",
-    "title": "How to Build REST APIs - Complete Tutorial",
-    "links": [
-      "/Users/developer/project1/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md",
-      "/Users/developer/project2/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"
-    ]
-  }
 }
 ```
 
 ### Overwrite Behavior
 
-If a link already exists at `./transcripts/{videoId}_{formattedTitle}.md`, it is overwritten:
+If a link already exists at `./transcripts/transcript_{videoId}_{formattedTitle}.md`, it is overwritten:
 
 **Reason**: Ensures link points to correct source even if source path changed
 
@@ -1309,30 +1282,35 @@ Each processed video returns a result object:
 ### Scenario 1: Crash After Transcript Saved, Before Registry Update
 
 **State**:
-- Transcript file exists: `~/.transcriptor/transcripts/dQw4w9WgXcQ.md` ✓
+
+- Transcript file exists: `~/.transcriptor/transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✓
 - Registry entry missing: `data.json` has no entry for `dQw4w9WgXcQ` ✗
-- Link not created: `./transcripts/dQw4w9WgXcQ.md` ✗
+- Link not created: `./transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✗
 
 **Recovery on Re-run**:
+
 1. Auto-maintenance runs before processing (FR-7.1)
 2. Validates integrity: Finds transcript file with no registry entry
 3. Option A (current): Removes orphaned file
-4. Option B (future enhancement): Adds entry to registry with current date
+4. Option B (future enhancement): Adds entry to registry with current timestamp
 5. Processing proceeds normally
 
 **Alternate Recovery** (manual):
+
 - User can manually add entry to data.json
 - Or, re-run transcriptor (will fetch again from API, overwriting file)
 
 ### Scenario 2: Crash During Registry Write
 
 **State**:
-- Transcript file exists: `~/.transcriptor/transcripts/dQw4w9WgXcQ.md` ✓
+
+- Transcript file exists: `~/.transcriptor/transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✓
 - Registry temp file exists: `~/.transcriptor/data.json.tmp` (partial/complete)
 - Registry final file: `~/.transcriptor/data.json` (old state, no new entry)
-- Link not created: `./transcripts/dQw4w9WgXcQ.md` ✗
+- Link not created: `./transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✗
 
 **Recovery on Re-run**:
+
 1. Load registry: Reads `data.json` (old state, atomic rename never completed)
 2. Temp file ignored and will be cleaned up on next write
 3. Cache check fails (no registry entry)
@@ -1342,25 +1320,25 @@ Each processed video returns a result object:
 
 **Result**: No data corruption, system recovers automatically
 
-### Scenario 3: Crash After Link Creation, Before Link Tracking
+### Scenario 3: Crash After Link Creation
 
 **State**:
-- Transcript file exists: `~/.transcriptor/transcripts/dQw4w9WgXcQ.md` ✓
-- Registry entry exists: With `date_added` but empty `links` array ✓
-- Link exists: `./transcripts/dQw4w9WgXcQ.md` ✓ (but not tracked)
+
+- Transcript file exists: `~/.transcriptor/transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✓
+- Registry entry exists: With `date_added`, `channel`, and `title` ✓
+- Link exists: `./transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` ✓
 
 **Recovery on Re-run**:
+
 1. Cache check: Succeeds (registry entry + file exist)
 2. Load transcript from cache
 3. Create link: Attempts to create link (already exists, overwrite)
-4. Track link: Adds path to `links` array in registry
-5. Save registry: Persists updated `links` array
 
-**Result**: Link is properly tracked on re-run, no data loss
+**Result**: No data loss, system recovers automatically
 
 ## Cleanup Data Flow
 
-The `transcriptor clean YYYY-MM-DD` command removes old transcripts.
+The `transcriptor clean YYMMDD` command removes old transcripts.
 
 ### Cleanup Workflow
 
@@ -1370,9 +1348,9 @@ The `transcriptor clean YYYY-MM-DD` command removes old transcripts.
 
 1. **Validate Date**:
 ```javascript
-const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+const dateRegex = /^\d{6}$/;
 if (!dateRegex.test(dateArg)) {
-  console.error('Invalid date format. Use YYYY-MM-DD');
+  console.error('Invalid date format. Use YYMMDD');
   process.exit(1);
 }
 ```
@@ -1384,12 +1362,13 @@ const registry = await storageService.loadRegistry();
 
 3. **Filter Entries** (older than date, exclusive):
 ```javascript
-const cutoffDate = new Date(dateArg);
+const cutoffDate = dateArg; // YYMMDD format
 const toDelete = [];
 
 for (const videoId in registry) {
   const entry = registry[videoId];
-  const entryDate = new Date(entry.date_added);
+  // Extract YYMMDD portion from YYMMDDTHHMM timestamp
+  const entryDate = entry.date_added.substring(0, 6);
 
   if (entryDate < cutoffDate) {  // Exclusive comparison
     toDelete.push(videoId);
@@ -1399,12 +1378,11 @@ for (const videoId in registry) {
 
 **Exclusive Boundary**: Videos added on the specified date are **not** deleted
 
+**Date Matching**: Only the YYMMDD portion is compared; the THHMM (time) portion is ignored
+
 4. **Delete Each Entry**:
 ```javascript
 for (const videoId of toDelete) {
-  // Delete all tracked symbolic links
-  await linkManager.removeAllLinks(videoId);
-
   // Delete transcript file
   await storageService.deleteTranscript(videoId);
 
@@ -1419,51 +1397,15 @@ await storageService.saveRegistry(registry);
 console.log(`Deleted ${toDelete.length} transcripts`);
 ```
 
-### Link Deletion Process
-
-**Code Reference**: `src/services/LinkManager.js` - `removeAllLinks()`
-
-```javascript
-async function removeAllLinks(videoId) {
-  const registry = await this.storage.loadRegistry();
-  const entry = registry[videoId];
-
-  if (!entry || !entry.links) {
-    return; // No links to delete
-  }
-
-  // Delete each link
-  for (const linkPath of entry.links) {
-    try {
-      await fs.unlink(linkPath);
-      console.log(`[LinkManager] Deleted link: ${linkPath}`);
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        // Link already gone - idempotent
-        console.log(`[LinkManager] Link not found (already deleted): ${linkPath}`);
-      } else {
-        // Log but continue
-        console.error(`[LinkManager] Failed to delete link ${linkPath}: ${error.message}`);
-      }
-    }
-  }
-
-  // Clear links array in registry entry
-  entry.links = [];
-}
-```
-
 ### Error Handling During Cleanup
 
-**Missing Links** (ENOENT):
-- Skipped silently (idempotent operation)
-- Link may have been manually deleted
-
 **Missing Transcript File**:
+
 - Logged as warning
 - Registry entry still removed (cleanup completes)
 
 **Permission Errors**:
+
 - Logged as error
 - Continue with remaining deletions
 - Partial cleanup may result (some files deleted, others remain)
@@ -1471,58 +1413,56 @@ async function removeAllLinks(videoId) {
 ### Example Cleanup Operation
 
 **Before Cleanup**:
+
 ```json
 // data.json
 {
   "video1": {
-    "date_added": "2025-11-01",
-    "channel": "Channel A",
-    "title": "Old Video",
-    "links": ["/project1/transcripts/video1_old_video.md"]
+    "date_added": "251101T1030",
+    "channel": "channel_a",
+    "title": "old_video"
   },
   "video2": {
-    "date_added": "2025-11-15",
-    "channel": "Channel B",
-    "title": "Recent Video",
-    "links": ["/project1/transcripts/video2_recent_video.md"]
+    "date_added": "251115T1420",
+    "channel": "channel_b",
+    "title": "recent_video"
   },
   "video3": {
-    "date_added": "2025-11-20",
-    "channel": "Channel C",
-    "title": "New Video",
-    "links": ["/project1/transcripts/video3_new_video.md"]
+    "date_added": "251120T0915",
+    "channel": "channel_c",
+    "title": "new_video"
   }
 }
 ```
 
-**Command**: `transcriptor clean 2025-11-15`
+**Command**: `transcriptor clean 251115`
 
 **After Cleanup**:
+
 ```json
 // data.json
 {
   "video2": {
-    "date_added": "2025-11-15",
-    "channel": "Channel B",
-    "title": "Recent Video",
-    "links": ["/project1/transcripts/video2_recent_video.md"]
+    "date_added": "251115T1420",
+    "channel": "channel_b",
+    "title": "recent_video"
   },
   "video3": {
-    "date_added": "2025-11-20",
-    "channel": "Channel C",
-    "title": "New Video",
-    "links": ["/project1/transcripts/video3_new_video.md"]
+    "date_added": "251120T0915",
+    "channel": "channel_c",
+    "title": "new_video"
   }
 }
 ```
 
 **Files Deleted**:
-- `~/.transcriptor/transcripts/video1_old_video.md` ✓
-- `/project1/transcripts/video1_old_video.md` (symlink) ✓
+
+- `~/.transcriptor/transcripts/transcript_video1_old_video.md` ✓
 
 **Files Kept**:
-- `~/.transcriptor/transcripts/video2_recent_video.md` (date matches boundary)
-- `~/.transcriptor/transcripts/video3_new_video.md` (newer than boundary)
+
+- `~/.transcriptor/transcripts/transcript_video2_recent_video.md` (date matches boundary)
+- `~/.transcriptor/transcripts/transcript_video3_new_video.md` (newer than boundary)
 
 ## Auto-Maintenance Flow
 
@@ -1577,7 +1517,8 @@ async function _removeOrphanedEntry(videoId) {
 ### Common Orphan Scenarios
 
 **Scenario 1**: Manual file deletion
-- User manually deletes `~/.transcriptor/transcripts/video1.md`
+
+- User manually deletes `~/.transcriptor/transcripts/transcript_video1_old_video.md`
 - Registry still has entry for `video1`
 - Auto-maintenance detects and removes entry
 
@@ -1602,54 +1543,55 @@ async function _removeOrphanedEntry(videoId) {
 **Stage 2 Output**: Cache miss (no registry entry, no file)
 
 **Stage 3 Output**:
+
 - Transcript text: `"Hello and welcome to this video tutorial..."`
 - Metadata: `{channel: "JavaScript Mastery", title: "How to Build REST APIs - Complete Tutorial"}`
 
 **Stage 4 Output**:
+
+- Formatted channel: `"javascript_mastery"`
 - Formatted title: `"how_to_build_rest_apis_complete_tutorial"`
 - Metadata header:
-```
-Channel: JavaScript Mastery
-Title: How to Build REST APIs - Complete Tutorial
+
+```text
+Channel: javascript_mastery
+Title: how_to_build_rest_apis_complete_tutorial
 Youtube ID: dQw4w9WgXcQ
 URL: https://youtu.be/dQw4w9WgXcQ
 ```
 
-**Stage 5 Output**: File created at `~/.transcriptor/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`:
-```
-Channel: JavaScript Mastery
-Title: How to Build REST APIs - Complete Tutorial
+**Stage 5 Output**: File created at `~/.transcriptor/transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`:
+
+```markdown
+# Transcript
+
+## Information
+
+Channel: javascript_mastery
+Title: how_to_build_rest_apis_complete_tutorial
 Youtube ID: dQw4w9WgXcQ
 URL: https://youtu.be/dQw4w9WgXcQ
+
+## Content
 
 Hello and welcome to this video tutorial...
 ```
 
 **Stage 6 Output**: Registry updated:
+
 ```json
 {
   "dQw4w9WgXcQ": {
-    "date_added": "2025-11-19",
-    "channel": "JavaScript Mastery",
-    "title": "How to Build REST APIs - Complete Tutorial",
-    "links": []
+    "date_added": "251119T1423",
+    "channel": "javascript_mastery",
+    "title": "how_to_build_rest_apis_complete_tutorial"
   }
 }
 ```
 
 **Stage 7 Output**:
-- Link created: `./transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` → `~/.transcriptor/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`
-- Registry updated:
-```json
-{
-  "dQw4w9WgXcQ": {
-    "date_added": "2025-11-19",
-    "channel": "JavaScript Mastery",
-    "title": "How to Build REST APIs - Complete Tutorial",
-    "links": ["/Users/developer/project1/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"]
-  }
-}
-```
+
+- Link created: `./transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md` → `~/.transcriptor/transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`
 
 **Stage 8 Output**: Summary report showing 1 success, 0 cached, 1 new fetch
 
@@ -1670,21 +1612,8 @@ Hello and welcome to this video tutorial...
 **Stage 6**: Skipped (entry already exists)
 
 **Stage 7 Output**:
-- Link created (or verified): `./transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`
-- Registry updated (link path added if not already tracked):
-```json
-{
-  "dQw4w9WgXcQ": {
-    "date_added": "2025-11-19",
-    "channel": "JavaScript Mastery",
-    "title": "How to Build REST APIs - Complete Tutorial",
-    "links": [
-      "/Users/developer/project1/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md",
-      "/Users/developer/project2/transcripts/dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md"
-    ]
-  }
-}
-```
+
+- Link created (or verified): `./transcripts/transcript_dQw4w9WgXcQ_how_to_build_rest_apis_complete_tutorial.md`
 
 **Stage 8 Output**: Summary report showing 1 success, 1 cached, 0 new fetches
 

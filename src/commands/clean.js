@@ -2,10 +2,12 @@ const StorageService = require('../services/StorageService');
 const LinkManager = require('../services/LinkManager');
 const pathResolver = require('../utils/pathResolver');
 const validators = require('../utils/validators');
+const dateUtils = require('../utils/dateUtils');
 
 /**
  * Validate registry entry structure for filtering
  * Ensures entry meets schema requirements before processing
+ * UPDATED Task 11.6: Support both YYMMDDTHHMM and YYYY-MM-DD formats
  *
  * @param {string} videoId - Video ID
  * @param {*} entry - Registry entry to validate
@@ -23,15 +25,12 @@ function validateRegistryEntry(videoId, entry) {
     return { valid: false, reason: 'Missing or invalid date_added field' };
   }
 
-  // Guard: date_added format valid (YYYY-MM-DD per BR-4)
+  // MODIFIED: Accept both YYMMDDTHHMM and YYYY-MM-DD (migration support)
   if (!validators.isValidDate(entry.date_added)) {
     return { valid: false, reason: `Invalid date format: ${entry.date_added}` };
   }
 
-  // Guard: links field exists and is array
-  if (!Array.isArray(entry.links)) {
-    return { valid: false, reason: 'Missing or invalid links field' };
-  }
+  // REMOVED: links field validation (Task 11.4 - no longer in schema)
 
   return { valid: true };
 }
@@ -96,7 +95,18 @@ async function cleanCommand(dateString) {
       return;
     }
 
-    // Filter transcripts by date (exclusive boundary)
+    // STEP 2.5: Convert user input to YYMMDD prefix for comparison (Task 11.6)
+    let boundaryPrefix;
+    try {
+      boundaryPrefix = dateUtils.convertDateToPrefix(dateString);
+    } catch (error) {
+      console.error('Date conversion failed:', error.message);
+      process.exit(2);
+    }
+
+    console.log(`Cleaning transcripts older than ${dateString} (prefix: ${boundaryPrefix})`);
+
+    // Filter transcripts by date prefix (exclusive boundary)
     const deletionCandidates = [];
     let skippedCount = 0;
     let corruptedCount = 0;
@@ -110,8 +120,24 @@ async function cleanCommand(dateString) {
         continue;
       }
 
-      // Compare dates as strings (YYYY-MM-DD lexicographic comparison works)
-      if (entry.date_added < dateString) {
+      // MODIFIED: Extract date prefix from timestamp and compare (Task 11.6)
+      let entryPrefix;
+
+      // Check if new format (YYMMDDTHHMM)
+      if (/^\d{6}T\d{4}$/.test(entry.date_added)) {
+        entryPrefix = dateUtils.extractDatePrefix(entry.date_added);
+      }
+      // Fallback to old format (YYYY-MM-DD) during migration
+      else if (/^\d{4}-\d{2}-\d{2}$/.test(entry.date_added)) {
+        entryPrefix = dateUtils.convertDateToPrefix(entry.date_added);
+      } else {
+        console.warn(`Skipping entry with unrecognized date format: ${videoId}`);
+        corruptedCount++;
+        continue;
+      }
+
+      // Compare prefixes (lexicographic comparison works for YYMMDD)
+      if (entryPrefix < boundaryPrefix) {
         deletionCandidates.push({ videoId, entry });
       } else {
         skippedCount++;
