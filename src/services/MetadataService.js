@@ -24,11 +24,14 @@ class MetadataService {
     this.FALLBACK_TITLE = 'Unknown Title';
     this.MAX_RETRIES = 3;
     this.RETRY_DELAY_MS = 1000; // Exponential backoff base
+    this.UNKNOWN_TITLE_RETRY_DELAY_MS = 3000; // 3 seconds for unknown_title retries (FR-2.6)
+    this.MAX_UNKNOWN_TITLE_RETRIES = 3; // Maximum retry attempts for unknown_title (FR-2.6)
   }
 
   /**
    * Fetch video metadata from YouTube oEmbed API with retry logic
    * Implements TR-20 metadata acquisition with fallback values
+   * Implements FR-2.6, TR-34 retry logic for unknown_title cases
    *
    * @param {string} videoId - YouTube video ID (11 chars)
    * @returns {Promise<{channel: string, title: string}>}
@@ -43,6 +46,48 @@ class MetadataService {
       };
     }
 
+    // Outer retry loop for unknown_title cases (FR-2.6, TR-34)
+    for (let unknownTitleAttempt = 0; unknownTitleAttempt <= this.MAX_UNKNOWN_TITLE_RETRIES; unknownTitleAttempt++) {
+      const metadata = await this._fetchMetadataWithRetry(videoId);
+
+      // Check if we got unknown_title after formatting
+      if (metadata.title === 'unknown_title') {
+        // If we still have retries left, sleep and retry
+        if (unknownTitleAttempt < this.MAX_UNKNOWN_TITLE_RETRIES) {
+          console.log(
+            `[MetadataService] API returned unknown_title, retrying in 3s (attempt ${unknownTitleAttempt + 1}/${this.MAX_UNKNOWN_TITLE_RETRIES})`
+          );
+          await this._sleep(this.UNKNOWN_TITLE_RETRY_DELAY_MS);
+          continue;
+        } else {
+          // Max retries exhausted
+          console.log(
+            `[MetadataService] Still unknown_title after ${this.MAX_UNKNOWN_TITLE_RETRIES} retries, proceeding with this title`
+          );
+          return metadata;
+        }
+      }
+
+      // Got valid title, return immediately
+      return metadata;
+    }
+
+    // Fallback (should not reach here, but safety guard)
+    return {
+      channel: this.formatChannel(this.FALLBACK_CHANNEL),
+      title: this.formatTitle(this.FALLBACK_TITLE),
+    };
+  }
+
+  /**
+   * Internal method to fetch metadata with 503 retry logic
+   * Separated from outer unknown_title retry loop
+   *
+   * @param {string} videoId - YouTube video ID (11 chars)
+   * @returns {Promise<{channel: string, title: string}>}
+   * @private
+   */
+  async _fetchMetadataWithRetry(videoId) {
     // Retry loop for 503 errors
     for (let attempt = 0; attempt < this.MAX_RETRIES; attempt++) {
       try {
@@ -73,7 +118,7 @@ class MetadataService {
           console.warn(
             `[MetadataService] 503 error for ${videoId}, retrying in ${delay}ms (attempt ${attempt + 1}/${this.MAX_RETRIES})`
           );
-          await new Promise((resolve) => setTimeout(resolve, delay));
+          await this._sleep(delay);
           continue;
         }
 
@@ -91,6 +136,18 @@ class MetadataService {
       channel: this.formatChannel(this.FALLBACK_CHANNEL),
       title: this.formatTitle(this.FALLBACK_TITLE),
     };
+  }
+
+  /**
+   * Sleep utility for retry delays
+   * Implements TR-34 retry delay mechanism
+   *
+   * @param {number} ms - Milliseconds to sleep
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**

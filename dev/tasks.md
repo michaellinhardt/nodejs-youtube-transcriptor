@@ -416,3 +416,22 @@ High-risk items: 4.3 (API integration), 5.3 (symbolic links cross-platform), 10.
   - [ ] 11.8.8 Verify cleaning routine ignores time portion correctly
   - [ ] 11.8.9 Test mixed old/new format handling during migration
   - [ ] 11.8.10 Full integration test with fresh install and migration scenarios
+
+## 12.0 Metadata Retry Logic Feature
+
+<!-- Estimated: 8 hours total | Depends on: 10.1, 11.0 | Implements FR-2.6, TR-34 -->
+
+- [x] 12.1 Retry mechanism implementation (implements FR-2.6, TR-34)
+  - [x] 12.1.1 Create retry utility function with sleep and max attempts
+  - [x] 12.1.2 Update MetadataService.fetchVideoMetadata to check for unknown_title
+  - [x] 12.1.3 Implement 3-second sleep between retry attempts
+  - [x] 12.1.4 Add retry counter and max retry limit (3 attempts)
+  - [x] 12.1.5 Add console logging for each retry attempt
+  - [x] 12.1.6 Add console logging when retries exhausted
+  - [x] 12.1.7 Ensure retries only apply to metadata, not transcript fetch
+- [x] 12.2 Integration and testing
+  - [x] 12.2.1 Test retry logic in test-transcriptor folder
+  - [x] 12.2.2 Verify console logs show retry attempts
+  - [x] 12.2.3 Test with transcriptor clean and re-run to trigger API errors
+  - [x] 12.2.4 Verify successful title fetch after retries
+  - [x] 12.2.5 Verify unknown_title saved if all retries fail

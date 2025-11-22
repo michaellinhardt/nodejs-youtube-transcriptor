@@ -477,6 +477,7 @@ MetadataError:
     channel: "Unknown Channel"
     title: "Unknown Title"
   behavior: nonfatal # Transcript processing continues
+  note: "See TR-34 for unknown_title retry logic"
 ```
 
 ## Maintenance Operations
@@ -714,6 +715,7 @@ ProcessVideoWithMetadata:
             - transcript ← api.fetchTranscript(url)
             - metadata ← api.fetchMetadata(videoId)
         - format_metadata(metadata) # sanitize title and channel
+        - if(formatted_title == "unknown_title"): trigger_retry_loop (see TR-34)
         - build_filename(videoId, metadata.title)
         - save_transcript_with_header(filename, header, transcript)
         - update_registry(videoId, metadata)
@@ -785,4 +787,38 @@ DeleteTranscript:
     - remove_registry_entry(videoId)
     - save_registry()
   no_link_deletion: links_not_tracked
+```
+
+### TR-34: Metadata Retry Logic (implements FR-2.6)
+
+```yaml
+RetryMetadataOnUnknownTitle:
+  trigger: formatted_title == "unknown_title"
+  retry_delay: 3000ms # 3 seconds
+  max_retries: 3
+  scope: metadata_only # Does not apply to transcript fetch
+  process:
+    - fetch_metadata → metadata
+    - format_title(metadata.title) → formatted_title
+    - attempt_counter = 0
+    - while(formatted_title == "unknown_title" AND attempt_counter < 3):
+        - log_retry_attempt(attempt_counter + 1, "API returned unknown_title")
+        - sleep(3000ms)
+        - attempt_counter++
+        - fetch_metadata → metadata
+        - format_title(metadata.title) → formatted_title
+    - if(attempt_counter >= 3 AND formatted_title == "unknown_title"):
+        - log_final_failure("Still unknown_title after 3 retries")
+        - continue_with_unknown_title
+  logging:
+    retry_attempt: "API returned unknown_title, retrying in 3s (attempt X/3)"
+    final_failure: "Still unknown_title after 3 retries, proceeding with this title"
+  error_handling:
+    metadata_fetch_error: treat_as_unknown, retry
+    network_timeout: treat_as_unknown, retry
+    max_retries_reached: accept_unknown_title, proceed
+  behavior:
+    - Does not affect transcript processing
+    - Transcript fetched in parallel, metadata retry independent
+    - Nonfatal: continues processing even after retries exhausted
 ```

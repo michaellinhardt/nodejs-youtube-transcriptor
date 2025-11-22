@@ -54,6 +54,15 @@ FR-2.5: System shall format text for filenames
 - Output: Sanitized text suitable for filesystem
 - Storage: Formatted versions stored in data registry
 
+FR-2.6: System shall retry metadata fetch on unknown_title
+
+- Trigger: Formatted title equals "unknown_title" after fetch
+- Retry strategy: Sleep 3 seconds, retry metadata fetch
+- Maximum retries: 3 additional attempts after initial failure
+- Final behavior: If still "unknown_title" after 3 retries, save with unknown_title
+- Logging: Console log each retry attempt with reason
+- Timing: Retries apply only to metadata fetch, not transcript fetch
+
 ## Storage Management
 
 ### FR-3: Centralized Repository
