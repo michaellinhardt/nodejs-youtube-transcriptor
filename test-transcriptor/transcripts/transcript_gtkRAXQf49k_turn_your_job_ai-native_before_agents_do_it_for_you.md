@@ -1,1 +1,0 @@
-/Users/teazyou/.transcriptor/transcripts/transcript_gtkRAXQf49k_turn_your_job_ai-native_before_agents_do_it_for_you.md

@@ -1,1 +1,0 @@
-/Users/teazyou/.transcriptor/transcripts/transcript_LNpp73qHbJA_unknown_title.md
